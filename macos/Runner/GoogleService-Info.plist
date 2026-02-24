@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CLIENT_ID</key>
+	<string>133687474742-l4tdlb7iqb1kkh65o0vjbaco4ttkh9eh.apps.googleusercontent.com</string>
+	<key>REVERSED_CLIENT_ID</key>
+	<string>com.googleusercontent.apps.133687474742-l4tdlb7iqb1kkh65o0vjbaco4ttkh9eh</string>
+	<key>API_KEY</key>
+	<string>AIzaSyDMXfpQWiO6eqY_Z4-AzMTXjXy9M-33qpk</string>
+	<key>GCM_SENDER_ID</key>
+	<string>133687474742</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.smartfood.smartFood</string>
+	<key>PROJECT_ID</key>
+	<string>noryapp-2831b</string>
+	<key>STORAGE_BUCKET</key>
+	<string>noryapp-2831b.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:133687474742:ios:2b18c14c6ade5023eaf697</string>
+</dict>
+</plist>

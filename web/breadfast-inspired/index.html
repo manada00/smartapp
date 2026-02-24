@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Breadfast-Inspired UI Kit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <div class="brand">Morning Basket</div>
+        <nav class="tabs" id="tabs">
+          <button class="tab active" data-screen="home">Homepage</button>
+          <button class="tab" data-screen="listing">Listing</button>
+          <button class="tab" data-screen="detail">Detail</button>
+          <button class="tab" data-screen="cart">Cart</button>
+          <button class="tab" data-screen="checkout">Checkout</button>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container layout">
+      <section class="screen active" id="home">
+        <div class="hero card">
+          <div>
+            <p class="eyebrow">Fast grocery app experience</p>
+            <h1>Household essentials, delivered in minutes.</h1>
+            <p class="muted">Placeholder copy for hero section. Replace with your own campaign text.</p>
+            <div class="actions">
+              <button class="btn btn-primary">Start Shopping</button>
+              <button class="btn btn-ghost">Explore Categories</button>
+            </div>
+          </div>
+          <div class="hero-art placeholder">Hero image placeholder</div>
+        </div>
+
+        <div class="section-title-row">
+          <h2>Popular Categories</h2>
+        </div>
+        <div class="category-grid">
+          <article class="category-card card"><div class="placeholder">Image</div><h3>Fresh Bakery</h3></article>
+          <article class="category-card card"><div class="placeholder">Image</div><h3>Dairy & Eggs</h3></article>
+          <article class="category-card card"><div class="placeholder">Image</div><h3>Snacks</h3></article>
+          <article class="category-card card"><div class="placeholder">Image</div><h3>Home Care</h3></article>
+        </div>
+      </section>
+
+      <section class="screen" id="listing">
+        <div class="toolbar card">
+          <input class="input" placeholder="Search products" />
+          <button class="chip active">All</button>
+          <button class="chip">Fresh</button>
+          <button class="chip">Offers</button>
+          <button class="chip">Top rated</button>
+        </div>
+        <div class="product-grid">
+          <article class="product-card card">
+            <div class="placeholder tall">Product image</div>
+            <p class="kicker">Private label</p>
+            <h3>Product Name Placeholder</h3>
+            <p class="muted">Short product subtitle</p>
+            <div class="row-between"><span class="price">EGP 89.95</span><button class="btn btn-small">Add</button></div>
+          </article>
+          <article class="product-card card">
+            <div class="placeholder tall">Product image</div>
+            <p class="kicker">Best seller</p>
+            <h3>Product Name Placeholder</h3>
+            <p class="muted">Short product subtitle</p>
+            <div class="row-between"><span class="price">EGP 54.00</span><button class="btn btn-small">Add</button></div>
+          </article>
+          <article class="product-card card">
+            <div class="placeholder tall">Product image</div>
+            <p class="kicker">New</p>
+            <h3>Product Name Placeholder</h3>
+            <p class="muted">Short product subtitle</p>
+            <div class="row-between"><span class="price">EGP 129.00</span><button class="btn btn-small">Add</button></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="detail">
+        <div class="detail-layout">
+          <div class="card detail-media placeholder">Product media placeholder</div>
+          <div class="card detail-info">
+            <p class="kicker">Category / Brand</p>
+            <h2>Product Name Placeholder</h2>
+            <p class="muted">Product description placeholder. Keep concise and conversion-friendly.</p>
+            <div class="row-between"><span class="price xl">EGP 89.95</span><span class="badge">15% off</span></div>
+            <div class="qty-row">
+              <button class="qty-btn">−</button>
+              <span>1</span>
+              <button class="qty-btn">+</button>
+            </div>
+            <button class="btn btn-primary full">Add to Cart</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="cart">
+        <div class="card cart-list">
+          <h2>Your Cart</h2>
+          <div class="cart-item">
+            <div class="thumb placeholder">Img</div>
+            <div>
+              <h4>Cart Item Placeholder</h4>
+              <p class="muted">500g</p>
+            </div>
+            <div class="row-right">
+              <div class="qty-row small"><button class="qty-btn">−</button><span>2</span><button class="qty-btn">+</button></div>
+              <strong>EGP 108.00</strong>
+            </div>
+          </div>
+          <div class="cart-item">
+            <div class="thumb placeholder">Img</div>
+            <div>
+              <h4>Cart Item Placeholder</h4>
+              <p class="muted">1L</p>
+            </div>
+            <div class="row-right">
+              <div class="qty-row small"><button class="qty-btn">−</button><span>1</span><button class="qty-btn">+</button></div>
+              <strong>EGP 64.00</strong>
+            </div>
+          </div>
+        </div>
+        <aside class="card summary">
+          <h3>Order Summary</h3>
+          <div class="row-between"><span>Subtotal</span><span>EGP 172.00</span></div>
+          <div class="row-between"><span>Delivery</span><span>EGP 20.00</span></div>
+          <div class="row-between total"><span>Total</span><span>EGP 192.00</span></div>
+          <button class="btn btn-primary full">Proceed to Checkout</button>
+        </aside>
+      </section>
+
+      <section class="screen" id="checkout">
+        <div class="checkout-grid">
+          <div class="card form-card">
+            <h2>Checkout</h2>
+            <label>Delivery Address<input class="input" placeholder="Street, building, apartment" /></label>
+            <label>Phone Number<input class="input" placeholder="+20 XXX XXX XXXX" /></label>
+            <label>Payment Method
+              <select class="input"><option>Card on file</option><option>Cash on delivery</option></select>
+            </label>
+            <label>Promo Code<input class="input" placeholder="Enter promo" /></label>
+          </div>
+          <aside class="card summary">
+            <h3>Summary</h3>
+            <div class="row-between"><span>Items</span><span>EGP 172.00</span></div>
+            <div class="row-between"><span>Delivery</span><span>EGP 20.00</span></div>
+            <div class="row-between"><span>Service fee</span><span>EGP 6.00</span></div>
+            <div class="row-between total"><span>Grand Total</span><span>EGP 198.00</span></div>
+            <button class="btn btn-primary full">Place Order</button>
+          </aside>
+        </div>
+      </section>
+    </main>
+
+    <section class="container styleguide card">
+      <h2>Style Guide</h2>
+      <div class="sg-grid">
+        <div>
+          <h3>Brand palette</h3>
+          <ul class="swatches">
+            <li><span style="background:#aa0082"></span>Primary Magenta #AA0082</li>
+            <li><span style="background:#79005d"></span>Primary Dark #79005D</li>
+            <li><span style="background:#ffe9fa"></span>Tint Pink #FFE9FA</li>
+            <li><span style="background:#fff5e3"></span>Warm Canvas #FFF5E3</li>
+            <li><span style="background:#ffe8c4"></span>Soft Peach #FFE8C4</li>
+            <li><span style="background:#c6f1d5"></span>Mint Accent #C6F1D5</li>
+            <li><span style="background:#c8dcfb"></span>Cool Accent #C8DCFB</li>
+            <li><span style="background:#383838"></span>Text Ink #383838</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Typography</h3>
+          <p><strong>Font:</strong> Inter (or SF Pro/Manrope as alternatives)</p>
+          <p>H1 52/60, H2 36/44, H3 24/32, Body 16/24, Label 14/20, Caption 12/16</p>
+          <h3>Spacing</h3>
+          <p>4, 8, 12, 16, 24, 32, 48</p>
+          <h3>States</h3>
+          <p>Hover: +4% brightness, Active: -6% brightness, Disabled: 45% opacity</p>
+        </div>
+      </div>
+    </section>
+
+    <script src="./app.js"></script>
+  </body>
+  </html>

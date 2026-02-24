@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "133687474742",
+    "project_id": "noryapp-2831b",
+    "storage_bucket": "noryapp-2831b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:133687474742:android:de8725c5b1c123c9eaf697",
+        "android_client_info": {
+          "package_name": "com.smartfood.smart_food"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "133687474742-gj1s2g4deptetaqbursdnipecb2kbf5r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBaMG_oQtZx8HVFDp7RZM0JoWgbqaAdgcw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "133687474742-gj1s2g4deptetaqbursdnipecb2kbf5r.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "133687474742-l4tdlb7iqb1kkh65o0vjbaco4ttkh9eh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.smartfood.smartFood"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
