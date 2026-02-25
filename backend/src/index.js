@@ -5,6 +5,7 @@ const morgan = require('morgan');
 const http = require('http');
 const { Server } = require('socket.io');
 const connectDB = require('./config/database');
+const User = require('./models/User');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -45,6 +46,23 @@ app.use('/api/v1/admin', adminRoutes);
 // Health check
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'SmartApp API running' });
+});
+
+app.get('/db-test', async (req, res) => {
+  try {
+    const users = await User.find().limit(1);
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      message: 'MongoDB connected successfully',
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
 });
 
 // Socket.IO connection
