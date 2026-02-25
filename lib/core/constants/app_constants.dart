@@ -103,8 +103,13 @@ class ApiConstants {
   // Food endpoints
   static const String categories = '/food/categories';
   static const String foods = '/food';
+  static const String homeConfig = '/food/home-config';
+  static const String supportConfig = '/food/support-config';
   static const String recommendations = '/food/recommendations';
   static const String search = '/food/search';
+
+  // Support endpoints
+  static const String supportTickets = '/user/support/tickets';
 
   // Cart endpoints
   static const String cart = '/cart';

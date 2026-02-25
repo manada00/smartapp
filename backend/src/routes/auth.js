@@ -118,6 +118,13 @@ router.post('/verify-otp', [
       });
     }
 
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: 'User account is blocked',
+      });
+    }
+
     // Generate tokens
     const tokens = generateTokens(user._id);
 
@@ -217,6 +224,13 @@ router.post('/social', [
       user.profileImage = user.profileImage || decodedToken.picture;
     }
 
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: 'User account is blocked',
+      });
+    }
+
     const tokens = generateTokens(user._id);
     user.refreshTokens.push(tokens.refreshToken);
     await user.save();
@@ -264,6 +278,13 @@ router.post('/refresh', async (req, res) => {
       return res.status(401).json({
         success: false,
         message: 'Invalid refresh token',
+      });
+    }
+
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: 'User account is blocked',
       });
     }
 

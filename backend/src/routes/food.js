@@ -1,9 +1,39 @@
 const express = require('express');
 const Food = require('../models/Food');
 const Category = require('../models/Category');
+const AppConfig = require('../models/AppConfig');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
+
+const DEFAULT_MOODS = [
+  { type: 'need_energy', isVisible: true, sortOrder: 0 },
+  { type: 'very_hungry', isVisible: true, sortOrder: 1 },
+  { type: 'something_light', isVisible: true, sortOrder: 2 },
+  { type: 'trained_today', isVisible: true, sortOrder: 3 },
+  { type: 'stressed', isVisible: true, sortOrder: 4 },
+  { type: 'bloated', isVisible: true, sortOrder: 5 },
+  { type: 'help_sleep', isVisible: true, sortOrder: 6 },
+  { type: 'kid_needs_meal', isVisible: true, sortOrder: 7 },
+  { type: 'fasting_tomorrow', isVisible: true, sortOrder: 8 },
+  { type: 'browse_all', isVisible: true, sortOrder: 9 },
+];
+
+const getOrCreateAppConfig = async () => {
+  let config = await AppConfig.findOne({ key: 'default' });
+  if (!config) {
+    config = await AppConfig.create({
+      key: 'default',
+      moods: DEFAULT_MOODS,
+      supportContact: {
+        phone: '01552785430',
+        email: 'support@smartfood.app',
+        whatsapp: '01552785430',
+      },
+    });
+  }
+  return config;
+};
 
 // Get categories
 router.get('/categories', async (req, res) => {
@@ -112,6 +142,58 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// Get home screen config
+router.get('/home-config', async (req, res) => {
+  try {
+    const config = await getOrCreateAppConfig();
+
+    const moods = (Array.isArray(config.moods) ? config.moods : DEFAULT_MOODS)
+      .filter((mood) => mood.isVisible !== false)
+      .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+
+    return res.json({
+      success: true,
+      data: {
+        heroTitle: config.homeHero?.title || '',
+        heroSubtitle: config.homeHero?.subtitle || '',
+        announcementEnabled: Boolean(config.announcement?.enabled),
+        announcementMessage: config.announcement?.message || '',
+        promotions: Array.isArray(config.promotions)
+          ? config.promotions.filter((item) => item?.isActive)
+          : [],
+        moods,
+        popularFoodIds: (config.popularFoodIds || []).map((id) => String(id)),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+// Get support contact config
+router.get('/support-config', async (req, res) => {
+  try {
+    const config = await getOrCreateAppConfig();
+
+    return res.json({
+      success: true,
+      data: {
+        phone: config.supportContact?.phone || '01552785430',
+        email: config.supportContact?.email || 'support@smartfood.app',
+        whatsapp: config.supportContact?.whatsapp || config.supportContact?.phone || '01552785430',
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

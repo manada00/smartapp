@@ -11,6 +11,7 @@ import 'core/router/app_router.dart';
 import 'core/storage/local_storage.dart';
 import 'core/storage/secure_storage.dart';
 import 'presentation/providers/locale_provider.dart';
+import 'presentation/widgets/support/support_notification_listener.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,6 +61,10 @@ class SmartFoodApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      builder: (context, child) {
+        if (child == null) return const SizedBox.shrink();
+        return SupportNotificationListener(child: child);
+      },
       routerConfig: AppRouter.router,
     );
   }

@@ -1,36 +1,22 @@
-import { Card, Button } from '@/components/ui/primitives';
+import { fetchAdmin } from '@/lib/backend';
+import { ReportsView } from '@/components/reports/reports-view';
 
-const reportCards = [
-  'Daily sales',
-  'Monthly revenue',
-  'Category performance',
-  'Top 10 items',
-  'Low-performing items',
-  'Customer retention',
-  'Repeat purchase rate',
-  'Average order value',
-];
+export default async function ReportsPage() {
+  const reportRes = await fetchAdmin('/api/v1/admin/reports?range=daily');
 
-export default function ReportsPage() {
-  return (
-    <div className="grid">
-      <Card>
-        <h3>Reports & Analytics</h3>
-        <div className="toolbar">
-          <input type="date" />
-          <input type="date" />
-          <Button>Export CSV</Button>
-          <Button>Export PDF</Button>
-        </div>
-      </Card>
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
-        {reportCards.map((item) => (
-          <Card key={item}>
-            <h3>{item}</h3>
-            <p className="muted">KPI widgets + trend deltas sourced from Supabase views/materialized reports.</p>
-          </Card>
-        ))}
-      </div>
-    </div>
-  );
+  const initialData = reportRes?.data || {
+    range: 'daily',
+    from: new Date().toISOString(),
+    to: new Date().toISOString(),
+    totalSales: 0,
+    totalOrders: 0,
+    returnedOrders: 0,
+    casesOrMessagesSent: 0,
+    repeatPurchaseRate: 0,
+    topItems: [],
+    lowPerformanceItems: [],
+    salesByPeriod: [],
+  };
+
+  return <ReportsView initialData={initialData} />;
 }

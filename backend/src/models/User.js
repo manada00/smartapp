@@ -62,6 +62,10 @@ const userSchema = new mongoose.Schema({
   isOnboardingComplete: { type: Boolean, default: false },
   fcmToken: String,
   refreshTokens: [String],
+  isBlocked: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   timestamps: true,
 });

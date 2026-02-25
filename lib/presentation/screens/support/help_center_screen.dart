@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/router/app_router.dart';
+import '../../providers/support_provider.dart';
 import '../../widgets/common/app_text_field.dart';
 
 class HelpCenterScreen extends ConsumerStatefulWidget {
@@ -293,9 +297,20 @@ class _FaqTile extends StatelessWidget {
   }
 }
 
-class _StillNeedHelpSection extends StatelessWidget {
+class _StillNeedHelpSection extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final supportConfigAsync = ref.watch(supportConfigProvider);
+
+    Future<void> launchCall() async {
+      final supportConfig = supportConfigAsync.value;
+      final phone = supportConfig?.phone ?? '01552785430';
+      final uri = Uri.parse('tel:$phone');
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -323,7 +338,7 @@ class _StillNeedHelpSection extends StatelessWidget {
                   child: _HelpButton(
                     icon: Icons.chat_bubble_rounded,
                     label: 'Chat',
-                    onTap: () {},
+                    onTap: () => context.push(Routes.contactSupport),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -331,7 +346,7 @@ class _StillNeedHelpSection extends StatelessWidget {
                   child: _HelpButton(
                     icon: Icons.phone_rounded,
                     label: 'Call',
-                    onTap: () {},
+                    onTap: () => launchCall(),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -339,7 +354,7 @@ class _StillNeedHelpSection extends StatelessWidget {
                   child: _HelpButton(
                     icon: Icons.email_rounded,
                     label: 'Email',
-                    onTap: () {},
+                    onTap: () => context.push(Routes.contactSupport),
                   ),
                 ),
               ],

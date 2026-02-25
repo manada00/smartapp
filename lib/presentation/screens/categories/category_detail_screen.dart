@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../data/models/food_model.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/router/app_router.dart';
@@ -32,6 +33,37 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     'Price High-Low',
     'Rating',
   ];
+
+  List<FoodModel> _sortedFoods(List<FoodModel> foods) {
+    final sorted = List<FoodModel>.from(foods);
+
+    switch (_sortBy) {
+      case 'Price Low-High':
+        sorted.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case 'Price High-Low':
+        sorted.sort((a, b) => b.price.compareTo(a.price));
+        break;
+      case 'Rating':
+        sorted.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case 'Recommended':
+      default:
+        sorted.sort((a, b) {
+          final featuredComparison =
+              (b.isFeatured ? 1 : 0).compareTo(a.isFeatured ? 1 : 0);
+          if (featuredComparison != 0) return featuredComparison;
+
+          final ratingComparison = b.rating.compareTo(a.rating);
+          if (ratingComparison != 0) return ratingComparison;
+
+          return b.reviewCount.compareTo(a.reviewCount);
+        });
+        break;
+    }
+
+    return sorted;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,21 +109,25 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           ),
           Expanded(
             child: foodsAsync.when(
-              data: (foods) => ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: foods.length,
-                itemBuilder: (context, index) {
-                  final food = foods[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: FoodCard(
-                      food: food,
-                      onTap: () =>
-                          context.push('${Routes.foodDetail}/${food.id}'),
-                    ),
-                  );
-                },
-              ),
+              data: (foods) {
+                final sortedFoods = _sortedFoods(foods);
+
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  itemCount: sortedFoods.length,
+                  itemBuilder: (context, index) {
+                    final food = sortedFoods[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: FoodCard(
+                        food: food,
+                        onTap: () =>
+                            context.push('${Routes.foodDetail}/${food.id}'),
+                      ),
+                    );
+                  },
+                );
+              },
               loading: () => const LoadingWidget(),
               error: (e, _) => Center(child: Text('Error: $e')),
             ),

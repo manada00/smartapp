@@ -37,8 +37,36 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final categoriesAsync = ref.watch(categoriesProvider);
     final popularFoodsAsync = ref.watch(popularFoodsProvider);
+    final allFoodsAsync = ref.watch(foodsProvider(null));
+    final homeConfigAsync = ref.watch(homeConfigProvider);
     final selectedAddress = ref.watch(selectedAddressProvider);
     final cartItemCount = ref.watch(cartItemCountProvider);
+
+    final homeConfig = homeConfigAsync.valueOrNull;
+    final heroTitle = (homeConfig?.heroTitle ?? '').trim().isNotEmpty
+        ? homeConfig!.heroTitle
+        : context.l10n.homeHeroTitle;
+    final heroSubtitle = (homeConfig?.heroSubtitle ?? '').trim().isNotEmpty
+        ? homeConfig!.heroSubtitle
+        : context.l10n.homeHeroSubtitle;
+    final activePromotions = homeConfig?.promotions ?? const <HomePromotion>[];
+
+    final curatedPopularFoods = _resolvePopularFoods(
+      config: homeConfig,
+      allFoods: allFoodsAsync.valueOrNull,
+      fallbackPopularFoods: popularFoodsAsync.valueOrNull,
+    );
+
+    final moodOverrides = {
+      for (final mood in homeConfig?.moods ?? const <HomeMood>[])
+        _feelingFromApiType(mood.type): mood,
+    };
+
+    final visibleFeelings = (homeConfig?.moods ?? const <HomeMood>[])
+        .where((mood) => mood.isVisible)
+        .map((mood) => _feelingFromApiType(mood.type))
+        .whereType<FeelingType>()
+        .toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -146,14 +174,14 @@ class HomeScreen extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            context.l10n.homeHeroTitle,
+                            heroTitle,
                             style: AppTextStyles.h5.copyWith(
                               color: AppColors.textOnPrimary,
                             ),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            context.l10n.homeHeroSubtitle,
+                            heroSubtitle,
                             style: AppTextStyles.bodySmall.copyWith(
                               color: AppColors.textOnPrimary.withValues(
                                 alpha: 0.9,
@@ -163,6 +191,43 @@ class HomeScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
+
+                    if ((homeConfig?.announcementEnabled ?? false) &&
+                        (homeConfig?.announcementMessage.trim().isNotEmpty ??
+                            false))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppColors.warning.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            homeConfig!.announcementMessage,
+                            style: AppTextStyles.labelMedium,
+                          ),
+                        ),
+                      ),
+
+                    if (activePromotions.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: SizedBox(
+                          height: 108,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemBuilder: (context, index) {
+                              final promo = activePromotions[index];
+                              return _PromotionCard(promotion: promo);
+                            },
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(width: 12),
+                            itemCount: activePromotions.length,
+                          ),
+                        ),
+                      ),
 
                     const SizedBox(height: 30),
 
@@ -180,7 +245,10 @@ class HomeScreen extends ConsumerWidget {
                       style: AppTextStyles.bodySmall,
                     ),
                     const SizedBox(height: 12),
-                    _FeelingGrid(),
+                    _FeelingGrid(
+                      visibleFeelings: visibleFeelings,
+                      moodOverrides: moodOverrides,
+                    ),
 
                     const SizedBox(height: 36),
 
@@ -237,7 +305,21 @@ class HomeScreen extends ConsumerWidget {
             // Popular foods
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              sliver: popularFoodsAsync.when(
+              sliver: (curatedPopularFoods != null)
+                  ? SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final food = curatedPopularFoods[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: FoodCard(
+                        food: food,
+                        onTap: () =>
+                            context.push('${Routes.foodDetail}/${food.id}'),
+                      ),
+                    );
+                  }, childCount: curatedPopularFoods.length.clamp(0, 3)),
+                )
+                  : popularFoodsAsync.when(
                 data: (foods) => SliverList(
                   delegate: SliverChildBuilderDelegate((context, index) {
                     final food = foods[index];
@@ -260,6 +342,107 @@ class HomeScreen extends ConsumerWidget {
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+List<FoodModel>? _resolvePopularFoods({
+  required HomeConfigModel? config,
+  required List<FoodModel>? allFoods,
+  required List<FoodModel>? fallbackPopularFoods,
+}) {
+  final curatedIds = config?.popularFoodIds ?? const <String>[];
+  if (curatedIds.isEmpty) {
+    return fallbackPopularFoods;
+  }
+  if (allFoods == null) {
+    return null;
+  }
+
+  final byId = {for (final food in allFoods) food.id: food};
+  return curatedIds
+      .map((id) => byId[id])
+      .whereType<FoodModel>()
+      .toList();
+}
+
+FeelingType? _feelingFromApiType(String value) {
+  switch (value) {
+    case 'need_energy':
+      return FeelingType.needEnergy;
+    case 'very_hungry':
+      return FeelingType.veryHungry;
+    case 'something_light':
+      return FeelingType.somethingLight;
+    case 'trained_today':
+      return FeelingType.trainedToday;
+    case 'stressed':
+      return FeelingType.stressed;
+    case 'bloated':
+      return FeelingType.bloated;
+    case 'help_sleep':
+      return FeelingType.helpSleep;
+    case 'kid_needs_meal':
+      return FeelingType.kidNeedsMeal;
+    case 'fasting_tomorrow':
+      return FeelingType.fastingTomorrow;
+    case 'browse_all':
+      return FeelingType.browseAll;
+    default:
+      return null;
+  }
+}
+
+class _PromotionCard extends StatelessWidget {
+  final HomePromotion promotion;
+
+  const _PromotionCard({required this.promotion});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = promotion.imageUrl.trim().isNotEmpty;
+    return Container(
+      width: 240,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: AppColors.surface,
+        image: hasImage
+            ? DecorationImage(
+                image: NetworkImage(promotion.imageUrl),
+                fit: BoxFit.cover,
+                colorFilter: ColorFilter.mode(
+                  Colors.black.withValues(alpha: 0.25),
+                  BlendMode.darken,
+                ),
+              )
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            promotion.title,
+            style: AppTextStyles.labelLarge.copyWith(
+              color: hasImage ? Colors.white : AppColors.textPrimary,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            promotion.message,
+            style: AppTextStyles.caption.copyWith(
+              color: hasImage
+                  ? Colors.white.withValues(alpha: 0.95)
+                  : AppColors.textSecondary,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
@@ -443,9 +626,19 @@ Color _feelingSurface(FeelingType feeling) {
 }
 
 class _FeelingGrid extends StatelessWidget {
+  final List<FeelingType> visibleFeelings;
+  final Map<FeelingType?, HomeMood> moodOverrides;
+
+  const _FeelingGrid({
+    required this.visibleFeelings,
+    required this.moodOverrides,
+  });
+
   @override
   Widget build(BuildContext context) {
-    final feelings = FeelingType.values.take(10).toList();
+    final feelings = visibleFeelings.isNotEmpty
+        ? visibleFeelings
+        : FeelingType.values.take(10).toList();
     final recommended = _recommendedFeeling();
 
     return LayoutBuilder(
@@ -464,6 +657,7 @@ class _FeelingGrid extends StatelessWidget {
               child: _FeelingCard(
                 feeling: feeling,
                 isRecommended: isRecommended,
+                moodOverride: moodOverrides[feeling],
                 onTap: () =>
                     context.push(Routes.recommendations, extra: feeling),
               ),
@@ -479,10 +673,12 @@ class _FeelingCard extends StatefulWidget {
   final FeelingType feeling;
   final bool isRecommended;
   final VoidCallback onTap;
+  final HomeMood? moodOverride;
 
   const _FeelingCard({
     required this.feeling,
     this.isRecommended = false,
+    this.moodOverride,
     required this.onTap,
   });
 
@@ -519,8 +715,12 @@ class _FeelingCardState extends State<_FeelingCard>
   Widget build(BuildContext context) {
     final color = _feelingColor(widget.feeling);
     final surface = _feelingSurface(widget.feeling);
-    final title = _supportiveTitle(context, widget.feeling);
-    final subtitle = _supportiveSubtitle(context, widget.feeling);
+    final title = (widget.moodOverride?.title.trim().isNotEmpty ?? false)
+        ? widget.moodOverride!.title
+        : _supportiveTitle(context, widget.feeling);
+    final subtitle = (widget.moodOverride?.subtitle.trim().isNotEmpty ?? false)
+        ? widget.moodOverride!.subtitle
+        : _supportiveSubtitle(context, widget.feeling);
     final trustLine = _trustLine(context, widget.feeling);
     final isActive = _isElevated;
 
@@ -627,7 +827,9 @@ class _FeelingCardState extends State<_FeelingCard>
                 ),
                 child: Center(
                   child: Text(
-                    _feelingIcon(widget.feeling),
+                    (widget.moodOverride?.emoji.trim().isNotEmpty ?? false)
+                        ? widget.moodOverride!.emoji
+                        : _feelingIcon(widget.feeling),
                     style: const TextStyle(fontSize: 18),
                   ),
                 ),

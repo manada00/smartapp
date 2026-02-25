@@ -104,6 +104,46 @@ final popularFoodsProvider = FutureProvider<List<FoodModel>>((ref) async {
       .toList();
 });
 
+final homeConfigProvider = FutureProvider<HomeConfigModel>((ref) async {
+  final dio = ref.watch(dioClientProvider);
+  final response = await dio.get(ApiConstants.homeConfig);
+  final data = response.data['data'] as Map<String, dynamic>? ?? {};
+  return HomeConfigModel(
+    heroTitle: _asString(data['heroTitle']),
+    heroSubtitle: _asString(data['heroSubtitle']),
+    announcementEnabled: _asBool(data['announcementEnabled']),
+    announcementMessage: _asString(data['announcementMessage']),
+    promotions: (data['promotions'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map((item) => HomePromotion(
+              title: _asString(item['title']),
+              message: _asString(item['message']),
+              imageUrl: _asString(item['imageUrl']),
+              ctaText: _asString(item['ctaText']),
+              isActive: _asBool(item['isActive']),
+            ))
+        .where((item) => item.isActive)
+        .toList(),
+    moods: (data['moods'] as List<dynamic>? ?? [])
+        .whereType<Map<String, dynamic>>()
+        .map((item) => HomeMood(
+              type: _asString(item['type']),
+              title: _asString(item['title']),
+              subtitle: _asString(item['subtitle']),
+              emoji: _asString(item['emoji']),
+              isVisible: _asBool(item['isVisible'], fallback: true),
+              sortOrder: _asInt(item['sortOrder']),
+            ))
+        .where((item) => item.isVisible)
+        .toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+    popularFoodIds: (data['popularFoodIds'] as List<dynamic>? ?? [])
+        .map((item) => _asString(item))
+        .where((item) => item.isNotEmpty)
+        .toList(),
+  );
+});
+
 final searchFoodsProvider =
     FutureProvider.family<List<FoodModel>, String>((ref, query) async {
   if (query.isEmpty) return [];
@@ -331,4 +371,58 @@ int _asInt(dynamic value, {int fallback = 0}) {
 bool _asBool(dynamic value, {bool fallback = false}) {
   if (value is bool) return value;
   return fallback;
+}
+
+class HomeConfigModel {
+  final String heroTitle;
+  final String heroSubtitle;
+  final bool announcementEnabled;
+  final String announcementMessage;
+  final List<HomePromotion> promotions;
+  final List<HomeMood> moods;
+  final List<String> popularFoodIds;
+
+  const HomeConfigModel({
+    required this.heroTitle,
+    required this.heroSubtitle,
+    required this.announcementEnabled,
+    required this.announcementMessage,
+    required this.promotions,
+    required this.moods,
+    required this.popularFoodIds,
+  });
+}
+
+class HomePromotion {
+  final String title;
+  final String message;
+  final String imageUrl;
+  final String ctaText;
+  final bool isActive;
+
+  const HomePromotion({
+    required this.title,
+    required this.message,
+    required this.imageUrl,
+    required this.ctaText,
+    required this.isActive,
+  });
+}
+
+class HomeMood {
+  final String type;
+  final String title;
+  final String subtitle;
+  final String emoji;
+  final bool isVisible;
+  final int sortOrder;
+
+  const HomeMood({
+    required this.type,
+    required this.title,
+    required this.subtitle,
+    required this.emoji,
+    required this.isVisible,
+    required this.sortOrder,
+  });
 }

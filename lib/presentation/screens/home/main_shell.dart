@@ -7,6 +7,7 @@ import '../../../core/localization/l10n_extensions.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/router/app_router.dart';
 import '../../providers/cart_provider.dart';
+import '../../providers/support_provider.dart';
 
 class MainShell extends ConsumerWidget {
   final Widget child;
@@ -41,6 +42,7 @@ class MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cartItemCount = ref.watch(cartItemCountProvider);
+    final supportUnreadCount = ref.watch(supportInboxProvider.select((state) => state.unreadCount));
     final selectedIndex = _getSelectedIndex(context);
     final activeColor = _activeMoodColor(selectedIndex);
 
@@ -119,6 +121,7 @@ class MainShell extends ConsumerWidget {
                       label: context.l10n.tr('profile'),
                       selected: selectedIndex == 4,
                       activeColor: activeColor,
+                      badge: supportUnreadCount > 0 ? '$supportUnreadCount' : null,
                       onTap: () => _onItemTapped(context, 4),
                     ),
                   ),

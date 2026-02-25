@@ -1,0 +1,247 @@
+# finalDoc
+
+## 1) What this project contains
+
+- **Mobile app (Flutter):** `/Users/mohab.nada/Cursor Ai/NoreApp`
+- **Backend API (Node.js/Express):** `/Users/mohab.nada/Cursor Ai/NoreApp/backend`
+- **Admin console (Next.js):** `/Users/mohab.nada/Cursor Ai/NoreApp/admin-console`
+
+---
+
+## 2) Prerequisites
+
+- Flutter `3.32+`
+- Dart `3.8+`
+- Node.js `18+` (20 recommended)
+- npm `9+`
+- MongoDB (local or Atlas)
+
+---
+
+## 3) Local setup and run
+
+### 3.1 Backend
+
+```bash
+cd "/Users/mohab.nada/Cursor Ai/NoreApp/backend"
+npm install
+cp .env.example .env
+```
+
+Set required values in `backend/.env`:
+
+```env
+PORT=4000
+NODE_ENV=development
+MONGODB_URI=...
+JWT_SECRET=...
+JWT_EXPIRES_IN=7d
+JWT_REFRESH_EXPIRES_IN=30d
+
+ADMIN_EMAIL=admin@smartapp.com
+ADMIN_PASSWORD=change-this-password
+ADMIN_ROLE=SUPER_ADMIN
+
+FIREBASE_PROJECT_ID=...
+FIREBASE_CLIENT_EMAIL=...
+FIREBASE_PRIVATE_KEY=...
+```
+
+Optional but used by code when enabled:
+
+```env
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+GOOGLE_CLIENT_IDS=web_client_id_1,ios_client_id_2
+RESEND_API_KEY=...
+EMAIL_FROM=SmartApp <orders@yourdomain.com>
+TRACK_ORDER_URL=https://your-app-domain.com/orders
+```
+
+Run backend:
+
+```bash
+npm run dev
+```
+
+Health check:
+
+```bash
+curl http://localhost:4000/health
+```
+
+### 3.2 Admin console
+
+```bash
+cd "/Users/mohab.nada/Cursor Ai/NoreApp/admin-console"
+npm install
+cp .env.example .env.local
+```
+
+Set in `admin-console/.env.local`:
+
+```env
+BACKEND_API_URL=http://localhost:4000
+```
+
+Run admin console:
+
+```bash
+npm run dev
+```
+
+Open: `http://localhost:3000`
+
+Login uses backend admin bootstrap credentials from `backend/.env`:
+
+- `ADMIN_EMAIL`
+- `ADMIN_PASSWORD`
+
+### 3.3 Mobile app
+
+```bash
+cd "/Users/mohab.nada/Cursor Ai/NoreApp"
+flutter pub get
+flutter gen-l10n
+flutter pub run build_runner build --delete-conflicting-outputs
+```
+
+Run mobile against local backend:
+
+```bash
+flutter run --dart-define=API_HOST=localhost --dart-define=API_PORT=4000
+```
+
+Notes:
+
+- API base is built from `API_HOST` + `API_PORT` in `lib/core/constants/app_constants.dart`.
+- Firebase is initialized from `lib/firebase_options.dart` and platform Firebase config files.
+
+---
+
+## 4) Validation commands
+
+### Backend
+
+```bash
+cd "/Users/mohab.nada/Cursor Ai/NoreApp/backend"
+npm test
+```
+
+### Admin console
+
+```bash
+cd "/Users/mohab.nada/Cursor Ai/NoreApp/admin-console"
+npm run lint
+npm run typecheck
+npm run build
+```
+
+### Mobile
+
+```bash
+cd "/Users/mohab.nada/Cursor Ai/NoreApp"
+flutter analyze
+flutter test
+```
+
+---
+
+## 5) Move to cloud
+
+## 5.1 Backend deployment (Render/Railway/Fly/VM)
+
+1. Create managed MongoDB (Atlas recommended).
+2. Deploy `backend` service.
+3. Set production env vars:
+   - `NODE_ENV=production`
+   - `PORT` (platform provided if required)
+   - `MONGODB_URI`, `JWT_SECRET`
+   - `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_ROLE`
+   - Firebase Admin vars (`FIREBASE_*`) for social login
+   - Optional: `SUPABASE_*`, `RESEND_*`, `GOOGLE_CLIENT_IDS`
+4. Start command: `npm start`.
+5. Verify:
+   - `GET /health`
+   - `POST /api/v1/admin/auth/login`
+
+## 5.2 Admin console deployment (Vercel/Node host)
+
+1. Deploy `admin-console` app.
+2. Set env:
+
+```env
+BACKEND_API_URL=https://<your-backend-domain>
+```
+
+3. Build/start:
+   - `npm run build`
+   - `npm run start` (if self-hosted)
+4. Verify login and dashboard data loading.
+
+## 5.3 Mobile production
+
+Build with production API host:
+
+```bash
+flutter build appbundle --release --dart-define=API_HOST=<api-domain> --dart-define=API_PORT=443
+flutter build ipa --release --dart-define=API_HOST=<api-domain> --dart-define=API_PORT=443
+```
+
+Before release:
+
+- Ensure Firebase project is production-ready for Android/iOS.
+- Verify login (OTP/social), create order, and tracking flow against cloud backend.
+
+---
+
+## 6) Payment gateway setup
+
+## 6.1 Current implementation status
+
+Implemented now:
+
+- `cod`
+- `card` (**mock simulation**)
+- `instapay` (**mock transfer + mock verification**)
+
+Implemented in backend payment service:
+
+- `backend/src/services/payment/paymentService.js`
+- `backend/src/services/payment/mockPaymentGateway.js`
+- `backend/src/routes/orders.js`
+
+UI exposes same methods in mobile checkout.
+
+## 6.2 To move payment to real gateway (recommended path)
+
+1. Keep `cod` as-is.
+2. Replace mock gateway with real provider integration (e.g., Paymob/Stripe):
+   - Create provider client in `backend/src/services/payment/`
+   - Update `PaymentService` to route calls to real provider
+   - Replace mock status generation in order create/retry/verify flows
+3. Store provider fields on order:
+   - transaction id
+   - reference id
+   - provider response status
+4. Add webhook endpoint for async payment updates.
+5. Verify signatures and idempotency in webhook processing.
+6. Update admin payment-status view to consume real statuses.
+7. Remove any client-side raw card handling; use gateway hosted fields/page/tokenization.
+
+## 6.3 Production payment checklist
+
+- Sandbox account created and tested
+- Live keys configured in cloud env vars
+- Webhook URL configured and verified
+- Refund path tested from admin route
+- Failed/timeout/retry scenarios tested
+- Logs and alerts configured for payment failures
+
+---
+
+## 7) Important gaps to be aware of
+
+- `.env.example` does not include all optional envs used by code (`SUPABASE_*`, `GOOGLE_CLIENT_IDS`).
+- OTP route currently has `TODO` for Twilio send; development OTP is currently exposed/logged for dev usage.
+- Paymob env variables exist in `.env.example`, but payment flow is still mock in current code.

@@ -1,12 +1,18 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const Order = require('../models/Order');
 const Food = require('../models/Food');
 const Category = require('../models/Category');
+const AppConfig = require('../models/AppConfig');
 const User = require('../models/User');
+const AdminUser = require('../models/AdminUser');
+const SupportTicket = require('../models/SupportTicket');
 const { protectAdmin, requireRoles } = require('../middleware/adminAuth');
 const { syncOrderPaymentToSupabase } = require('../services/payment/supabaseOrderSync');
 const { sendOrderConfirmationEmail } = require('../services/email/orderConfirmationService');
+const { sendSupportReplyEmail } = require('../services/email/supportEmailService');
 
 const router = express.Router();
 
@@ -29,6 +35,62 @@ const getDisplayPriceFromFood = (food) => {
   );
   const fallbackOption = food.portionOptions[0];
   return Number((popularOption || regularOption || fallbackOption)?.price || food.price || 0);
+};
+
+const DEFAULT_MOODS = [
+  { type: 'need_energy', isVisible: true, sortOrder: 0 },
+  { type: 'very_hungry', isVisible: true, sortOrder: 1 },
+  { type: 'something_light', isVisible: true, sortOrder: 2 },
+  { type: 'trained_today', isVisible: true, sortOrder: 3 },
+  { type: 'stressed', isVisible: true, sortOrder: 4 },
+  { type: 'bloated', isVisible: true, sortOrder: 5 },
+  { type: 'help_sleep', isVisible: true, sortOrder: 6 },
+  { type: 'kid_needs_meal', isVisible: true, sortOrder: 7 },
+  { type: 'fasting_tomorrow', isVisible: true, sortOrder: 8 },
+  { type: 'browse_all', isVisible: true, sortOrder: 9 },
+];
+
+const getOrCreateAppConfig = async () => {
+  let config = await AppConfig.findOne({ key: 'default' });
+  if (!config) {
+    config = await AppConfig.create({
+      key: 'default',
+      moods: DEFAULT_MOODS,
+      supportContact: {
+        phone: '01552785430',
+        email: 'support@smartfood.app',
+        whatsapp: '01552785430',
+      },
+    });
+  }
+  return config;
+};
+
+const ADMIN_ROLES = ['SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'];
+
+const getDateWindow = ({ range = 'daily', from, to }) => {
+  if (from || to) {
+    return {
+      start: from ? new Date(from) : new Date(0),
+      end: to ? new Date(to) : new Date(),
+    };
+  }
+
+  const now = new Date();
+  const start = new Date(now);
+  if (range === 'monthly') {
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+  } else if (range === 'weekly') {
+    const day = start.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - diff);
+    start.setHours(0, 0, 0, 0);
+  } else {
+    start.setHours(0, 0, 0, 0);
+  }
+
+  return { start, end: now };
 };
 
 router.use(protectAdmin);
@@ -78,6 +140,144 @@ router.get('/overview', async (req, res) => {
         lowStockItems,
         ordersByPaymentMethod,
         paymentStatusSummary,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/app-config/home', async (req, res) => {
+  try {
+    const config = await getOrCreateAppConfig();
+
+    return res.json({
+      success: true,
+      data: {
+        homeHero: {
+          title: config.homeHero?.title || '',
+          subtitle: config.homeHero?.subtitle || '',
+        },
+        announcement: {
+          enabled: Boolean(config.announcement?.enabled),
+          message: config.announcement?.message || '',
+        },
+        promotions: Array.isArray(config.promotions) ? config.promotions : [],
+        moods: Array.isArray(config.moods) ? config.moods : DEFAULT_MOODS,
+        popularFoodIds: (config.popularFoodIds || []).map((id) => String(id)),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.put('/app-config/home', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'), async (req, res) => {
+  try {
+    const config = await getOrCreateAppConfig();
+    const {
+      homeHero,
+      announcement,
+      promotions,
+      moods,
+      popularFoodIds,
+    } = req.body;
+
+    if (homeHero && typeof homeHero === 'object') {
+      config.homeHero = {
+        title: typeof homeHero.title === 'string' ? homeHero.title.trim() : (config.homeHero?.title || ''),
+        subtitle: typeof homeHero.subtitle === 'string' ? homeHero.subtitle.trim() : (config.homeHero?.subtitle || ''),
+      };
+    }
+
+    if (announcement && typeof announcement === 'object') {
+      config.announcement = {
+        enabled: typeof announcement.enabled === 'boolean' ? announcement.enabled : Boolean(config.announcement?.enabled),
+        message: typeof announcement.message === 'string' ? announcement.message.trim() : (config.announcement?.message || ''),
+      };
+    }
+
+    if (Array.isArray(promotions)) {
+      config.promotions = promotions.map((item) => ({
+        title: String(item?.title || '').trim(),
+        message: String(item?.message || '').trim(),
+        imageUrl: String(item?.imageUrl || '').trim(),
+        ctaText: String(item?.ctaText || '').trim(),
+        isActive: Boolean(item?.isActive),
+      }));
+    }
+
+    if (Array.isArray(moods)) {
+      config.moods = moods
+        .map((item) => ({
+          type: String(item?.type || '').trim(),
+          title: String(item?.title || '').trim(),
+          subtitle: String(item?.subtitle || '').trim(),
+          emoji: String(item?.emoji || '').trim(),
+          isVisible: item?.isVisible !== false,
+          sortOrder: Number.isFinite(Number(item?.sortOrder)) ? Number(item.sortOrder) : 0,
+        }))
+        .filter((item) => DEFAULT_MOODS.some((entry) => entry.type === item.type));
+    }
+
+    if (Array.isArray(popularFoodIds)) {
+      const uniqueIds = Array.from(new Set(popularFoodIds.map((id) => String(id)).filter(Boolean)));
+      const validFoods = await Food.find({ _id: { $in: uniqueIds } }).select('_id');
+      config.popularFoodIds = validFoods.map((item) => item._id);
+    }
+
+    await config.save();
+
+    return res.json({
+      success: true,
+      data: {
+        homeHero: config.homeHero,
+        announcement: config.announcement,
+        promotions: config.promotions,
+        moods: config.moods,
+        popularFoodIds: (config.popularFoodIds || []).map((id) => String(id)),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/app-config/support', async (req, res) => {
+  try {
+    const config = await getOrCreateAppConfig();
+    return res.json({
+      success: true,
+      data: {
+        phone: config.supportContact?.phone || '01552785430',
+        email: config.supportContact?.email || 'support@smartfood.app',
+        whatsapp: config.supportContact?.whatsapp || config.supportContact?.phone || '01552785430',
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.put('/app-config/support', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'), async (req, res) => {
+  try {
+    const config = await getOrCreateAppConfig();
+    const { phone, email, whatsapp } = req.body;
+
+    config.supportContact = {
+      phone: String(phone || config.supportContact?.phone || '01552785430').trim(),
+      email: String(email || config.supportContact?.email || 'support@smartfood.app').trim(),
+      whatsapp: String(whatsapp || phone || config.supportContact?.whatsapp || config.supportContact?.phone || '01552785430').trim(),
+    };
+
+    await config.save();
+
+    return res.json({
+      success: true,
+      data: {
+        phone: config.supportContact.phone,
+        email: config.supportContact.email,
+        whatsapp: config.supportContact.whatsapp,
       },
     });
   } catch (error) {
@@ -271,8 +471,90 @@ router.get('/menu', async (req, res) => {
 
 router.get('/menu/categories', async (req, res) => {
   try {
-    const categories = await Category.find({ isActive: true }).sort({ sortOrder: 1, createdAt: -1 });
+    const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
+    const query = includeInactive ? {} : { isActive: true };
+    const categories = await Category.find(query).sort({ sortOrder: 1, createdAt: -1 });
     return res.json({ success: true, data: categories });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/menu/categories', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'), async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      image,
+      sortOrder,
+      isActive,
+    } = req.body;
+
+    const trimmedName = String(name || '').trim();
+    if (!trimmedName) {
+      return res.status(400).json({ success: false, message: 'name is required' });
+    }
+
+    const category = await Category.create({
+      name: trimmedName,
+      description: typeof description === 'string' ? description.trim() : '',
+      image: typeof image === 'string' ? image.trim() : '',
+      sortOrder: Number.isFinite(Number(sortOrder)) ? Number(sortOrder) : 0,
+      isActive: typeof isActive === 'boolean' ? isActive : true,
+    });
+
+    return res.status(201).json({ success: true, data: category });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.put('/menu/categories/:id', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'), async (req, res) => {
+  try {
+    const {
+      name,
+      description,
+      image,
+      sortOrder,
+      isActive,
+    } = req.body;
+
+    const category = await Category.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ success: false, message: 'Category not found' });
+    }
+
+    if (typeof name === 'string') {
+      const trimmedName = name.trim();
+      if (!trimmedName) {
+        return res.status(400).json({ success: false, message: 'name cannot be empty' });
+      }
+      category.name = trimmedName;
+    }
+
+    if (typeof description === 'string') {
+      category.description = description.trim();
+    }
+
+    if (typeof image === 'string') {
+      category.image = image.trim();
+    }
+
+    if (sortOrder !== undefined) {
+      const parsedSortOrder = Number(sortOrder);
+      if (!Number.isFinite(parsedSortOrder)) {
+        return res.status(400).json({ success: false, message: 'sortOrder must be a number' });
+      }
+      category.sortOrder = parsedSortOrder;
+    }
+
+    if (typeof isActive === 'boolean') {
+      category.isActive = isActive;
+    }
+
+    await category.save();
+
+    return res.json({ success: true, data: category });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -555,19 +837,490 @@ router.post('/menu/:id/schedule', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'
 
 router.get('/users', async (req, res) => {
   try {
-    const users = await User.find({}).sort({ createdAt: -1 }).limit(200);
+    const [users, admins] = await Promise.all([
+      User.find({}).sort({ createdAt: -1 }).limit(300),
+      AdminUser.find({}).sort({ createdAt: -1 }).limit(100),
+    ]);
+
+    const basicUsers = users.map((user) => ({
+      id: user._id,
+      accountType: 'basic',
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+      totalSpend: user.loyaltyInfo?.totalSpent || 0,
+      totalOrders: user.loyaltyInfo?.totalOrders || 0,
+      points: user.loyaltyInfo?.points || 0,
+      walletBalance: user.wallet?.balance || 0,
+      isBlocked: Boolean(user.isBlocked),
+      role: 'BASIC_USER',
+      lastActivity: user.updatedAt,
+      createdAt: user.createdAt,
+    }));
+
+    const adminUsers = admins.map((admin) => ({
+      id: admin._id,
+      accountType: 'admin',
+      name: admin.email,
+      email: admin.email,
+      phone: '',
+      totalSpend: 0,
+      totalOrders: 0,
+      points: 0,
+      walletBalance: 0,
+      isBlocked: !admin.isActive,
+      role: admin.role,
+      lastActivity: admin.lastLoginAt || admin.updatedAt,
+      createdAt: admin.createdAt,
+    }));
+
     return res.json({
       success: true,
-      data: users.map((user) => ({
+      data: [...adminUsers, ...basicUsers].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      ),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/users', requireRoles('SUPER_ADMIN'), async (req, res) => {
+  try {
+    const { accountType = 'basic' } = req.body;
+
+    if (accountType === 'admin') {
+      const { email, password, role = 'SUPPORT_ADMIN' } = req.body;
+      const normalizedEmail = String(email || '').trim().toLowerCase();
+      if (!normalizedEmail) {
+        return res.status(400).json({ success: false, message: 'email is required' });
+      }
+      if (!String(password || '').trim() || String(password).trim().length < 6) {
+        return res.status(400).json({ success: false, message: 'password must be at least 6 characters' });
+      }
+      if (!ADMIN_ROLES.includes(role)) {
+        return res.status(400).json({ success: false, message: 'Invalid admin role' });
+      }
+
+      const exists = await AdminUser.findOne({ email: normalizedEmail });
+      if (exists) {
+        return res.status(409).json({ success: false, message: 'Admin email already exists' });
+      }
+
+      const passwordHash = await bcrypt.hash(String(password).trim(), 10);
+      const created = await AdminUser.create({
+        email: normalizedEmail,
+        passwordHash,
+        role,
+        isActive: true,
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: {
+          id: created._id,
+          accountType: 'admin',
+          email: created.email,
+          role: created.role,
+        },
+      });
+    }
+
+    const { name, email, phone } = req.body;
+    if (!String(name || '').trim() && !String(email || '').trim() && !String(phone || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Provide at least one of name, email, or phone' });
+    }
+
+    const user = await User.create({
+      name: String(name || '').trim(),
+      email: String(email || '').trim().toLowerCase(),
+      phone: String(phone || '').trim(),
+      socialProvider: 'phone',
+      referralCode: `SF${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
         id: user._id,
+        accountType: 'basic',
         name: user.name,
         email: user.email,
         phone: user.phone,
-        totalSpend: user.loyaltyInfo?.totalSpent || 0,
-        totalOrders: user.loyaltyInfo?.totalOrders || 0,
-        points: user.loyaltyInfo?.points || 0,
-        lastActivity: user.updatedAt,
-      })),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.put('/users/:id/block', requireRoles('SUPER_ADMIN', 'SUPPORT_ADMIN'), async (req, res) => {
+  try {
+    const { accountType = 'basic', isBlocked } = req.body;
+    const blocked = Boolean(isBlocked);
+
+    if (accountType === 'admin') {
+      if (req.admin.role !== 'SUPER_ADMIN') {
+        return res.status(403).json({ success: false, message: 'Only super admin can block admin users' });
+      }
+      if (String(req.admin._id) === String(req.params.id) && blocked) {
+        return res.status(400).json({ success: false, message: 'You cannot block your own admin account' });
+      }
+      const target = await AdminUser.findById(req.params.id);
+      if (!target) {
+        return res.status(404).json({ success: false, message: 'Admin user not found' });
+      }
+      target.isActive = !blocked;
+      await target.save();
+      return res.json({ success: true, data: { id: target._id, accountType: 'admin', isBlocked: !target.isActive } });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    user.isBlocked = blocked;
+    if (blocked) {
+      user.refreshTokens = [];
+    }
+    await user.save();
+    return res.json({ success: true, data: { id: user._id, accountType: 'basic', isBlocked: user.isBlocked } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.delete('/users/:id', requireRoles('SUPER_ADMIN'), async (req, res) => {
+  try {
+    const accountType = String(req.query.accountType || 'basic').toLowerCase();
+
+    if (accountType === 'admin') {
+      if (String(req.admin._id) === String(req.params.id)) {
+        return res.status(400).json({ success: false, message: 'You cannot delete your own admin account' });
+      }
+      const deleted = await AdminUser.findByIdAndDelete(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ success: false, message: 'Admin user not found' });
+      }
+      return res.json({ success: true, message: 'Admin user deleted' });
+    }
+
+    const deleted = await User.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    return res.json({ success: true, message: 'User deleted' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/users/:id/reset-password', requireRoles('SUPER_ADMIN', 'SUPPORT_ADMIN'), async (req, res) => {
+  try {
+    const { accountType = 'basic', newPassword } = req.body;
+
+    if (accountType === 'admin') {
+      if (req.admin.role !== 'SUPER_ADMIN') {
+        return res.status(403).json({ success: false, message: 'Only super admin can reset admin password' });
+      }
+      const admin = await AdminUser.findById(req.params.id);
+      if (!admin) {
+        return res.status(404).json({ success: false, message: 'Admin user not found' });
+      }
+
+      const password = String(newPassword || '').trim() || crypto.randomBytes(6).toString('base64url');
+      if (password.length < 6) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+      }
+      admin.passwordHash = await bcrypt.hash(password, 10);
+      await admin.save();
+
+      return res.json({
+        success: true,
+        message: 'Admin password reset successfully',
+        data: {
+          id: admin._id,
+          temporaryPassword: String(newPassword || '').trim() ? undefined : password,
+        },
+      });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+    user.refreshTokens = [];
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'User sessions revoked. User can sign in again with OTP/social login.',
+      data: { id: user._id },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/users/:id/issue-credit', requireRoles('SUPER_ADMIN', 'SUPPORT_ADMIN'), async (req, res) => {
+  try {
+    const { accountType = 'basic', amount } = req.body;
+    if (accountType === 'admin') {
+      return res.status(400).json({ success: false, message: 'Credits can only be issued to basic users' });
+    }
+
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'amount must be greater than 0' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    user.wallet = user.wallet || { balance: 0 };
+    user.wallet.balance = Number(user.wallet.balance || 0) + parsedAmount;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Credit issued successfully',
+      data: {
+        id: user._id,
+        walletBalance: user.wallet.balance,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/users/:id/orders', async (req, res) => {
+  try {
+    const accountType = String(req.query.accountType || 'basic').toLowerCase();
+    if (accountType === 'admin') {
+      return res.json({ success: true, data: [] });
+    }
+
+    const orders = await Order.find({ user: req.params.id })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('orderNumber status paymentStatus total createdAt');
+
+    return res.json({ success: true, data: orders });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/support/tickets', requireRoles('SUPER_ADMIN', 'SUPPORT_ADMIN', 'OPERATIONS_ADMIN'), async (req, res) => {
+  try {
+    const { status, q } = req.query;
+    const query = {};
+
+    if (status && ['open', 'pending', 'resolved', 'closed'].includes(String(status))) {
+      query.status = String(status);
+    }
+
+    if (q) {
+      query.subject = { $regex: String(q), $options: 'i' };
+    }
+
+    const tickets = await SupportTicket.find(query)
+      .sort({ updatedAt: -1 })
+      .limit(200)
+      .populate('user', 'name email phone')
+      .select('subject status priority initialChannel messages createdAt updatedAt user');
+
+    return res.json({ success: true, data: tickets });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post('/support/tickets/:id/reply', requireRoles('SUPER_ADMIN', 'SUPPORT_ADMIN', 'OPERATIONS_ADMIN'), async (req, res) => {
+  try {
+    const { message, channel = 'message' } = req.body;
+    const trimmedMessage = String(message || '').trim();
+    const selectedChannel = ['message', 'email'].includes(String(channel)) ? String(channel) : 'message';
+
+    if (!trimmedMessage) {
+      return res.status(400).json({ success: false, message: 'message is required' });
+    }
+
+    const ticket = await SupportTicket.findById(req.params.id).populate('user', 'name email');
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
+
+    if (selectedChannel === 'email') {
+      const recipient = ticket.user?.email;
+      const emailResult = await sendSupportReplyEmail({
+        to: recipient,
+        subject: `Support Reply: ${ticket.subject}`,
+        message: trimmedMessage,
+      });
+
+      if (!emailResult.success) {
+        return res.status(400).json({ success: false, message: emailResult.error || 'Failed to send email reply' });
+      }
+    }
+
+    ticket.messages.push({
+      senderType: 'admin',
+      senderAdmin: req.admin._id,
+      channel: selectedChannel,
+      content: trimmedMessage,
+      createdAt: new Date(),
+    });
+
+    ticket.status = selectedChannel === 'email' ? 'pending' : 'open';
+    await ticket.save();
+
+    return res.json({ success: true, data: ticket });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.put('/support/tickets/:id/status', requireRoles('SUPER_ADMIN', 'SUPPORT_ADMIN', 'OPERATIONS_ADMIN'), async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['open', 'pending', 'resolved', 'closed'].includes(String(status))) {
+      return res.status(400).json({ success: false, message: 'Invalid status' });
+    }
+
+    const ticket = await SupportTicket.findByIdAndUpdate(
+      req.params.id,
+      { status: String(status) },
+      { new: true },
+    );
+
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
+
+    return res.json({ success: true, data: ticket });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/reports', async (req, res) => {
+  try {
+    const { range = 'daily', from, to } = req.query;
+    const { start, end } = getDateWindow({ range: String(range || 'daily'), from, to });
+    const dateQuery = { createdAt: { $gte: start, $lte: end } };
+
+    const completedStatuses = ['delivered'];
+
+    const [
+      totalOrders,
+      returnedOrders,
+      supportCaseCount,
+      supportMessagesSent,
+      completedSalesAgg,
+      orders,
+      foods,
+      userOrderStats,
+    ] = await Promise.all([
+      Order.countDocuments(dateQuery),
+      Order.countDocuments({ ...dateQuery, status: 'cancelled' }),
+      SupportTicket.countDocuments(dateQuery),
+      SupportTicket.aggregate([
+        { $match: dateQuery },
+        { $unwind: '$messages' },
+        { $match: { 'messages.senderType': 'admin' } },
+        { $count: 'total' },
+      ]),
+      Order.aggregate([
+        { $match: { ...dateQuery, status: { $in: completedStatuses } } },
+        { $group: { _id: null, total: { $sum: '$total' } } },
+      ]),
+      Order.find(dateQuery).select('items total createdAt user status'),
+      Food.find({}).select('_id name'),
+      Order.aggregate([
+        { $match: dateQuery },
+        { $group: { _id: '$user', count: { $sum: 1 } } },
+      ]),
+    ]);
+
+    const itemTotals = new Map();
+    orders.forEach((order) => {
+      (order.items || []).forEach((item) => {
+        const key = String(item.food || item.foodName || 'unknown');
+        const entry = itemTotals.get(key) || {
+          itemId: item.food ? String(item.food) : key,
+          name: item.foodName || 'Unknown item',
+          quantity: 0,
+          revenue: 0,
+        };
+        entry.quantity += Number(item.quantity || 0);
+        entry.revenue += Number(item.totalPrice || 0);
+        itemTotals.set(key, entry);
+      });
+    });
+
+    const itemStats = Array.from(itemTotals.values())
+      .sort((a, b) => b.quantity - a.quantity);
+
+    const foodIdsWithOrders = new Set(itemStats.map((entry) => String(entry.itemId)));
+    const zeroOrderFoods = foods
+      .filter((food) => !foodIdsWithOrders.has(String(food._id)))
+      .map((food) => ({
+        itemId: String(food._id),
+        name: food.name,
+        quantity: 0,
+        revenue: 0,
+      }));
+
+    const topItems = itemStats.slice(0, 10);
+    const lowPerformanceItems = [...zeroOrderFoods, ...itemStats.slice().reverse()].slice(0, 10);
+
+    const customersWithOrders = userOrderStats.length;
+    const repeatCustomers = userOrderStats.filter((entry) => entry.count >= 2).length;
+    const repeatPurchaseRate = customersWithOrders > 0
+      ? Number(((repeatCustomers / customersWithOrders) * 100).toFixed(2))
+      : 0;
+
+    const salesByBucket = await Order.aggregate([
+      { $match: { ...dateQuery, status: { $in: completedStatuses } } },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: String(range) === 'monthly' ? '%Y-%m' : String(range) === 'weekly' ? '%Y-%U' : '%Y-%m-%d',
+              date: '$createdAt',
+            },
+          },
+          orders: { $sum: 1 },
+          sales: { $sum: '$total' },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        range,
+        from: start,
+        to: end,
+        totalSales: Number(completedSalesAgg[0]?.total || 0),
+        totalOrders,
+        returnedOrders,
+        casesOrMessagesSent: messageCount,
+        casesOrMessagesSent: supportCaseCount + Number(supportMessagesSent[0]?.total || 0),
+        topItems,
+        lowPerformanceItems,
+        salesByPeriod: salesByBucket.map((entry) => ({
+          label: entry._id,
+          orders: Number(entry.orders || 0),
+          sales: Number(entry.sales || 0),
+        })),
+      },
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
