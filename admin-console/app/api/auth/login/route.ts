@@ -27,21 +27,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: 'Email and password are required.' }, { status: 400 });
     }
 
-    const authRes = await fetch(`${getBackendUrl()}/api/v1/auth/admin/login`, {
+    const authRes = await fetch(`${getBackendUrl()}/api/v1/admin/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: String(email).trim(), password }),
     });
 
+    const backendPayload = (await authRes.json().catch(() => null)) as BackendLoginResponse | null;
+
     if (!authRes.ok) {
-      return NextResponse.json({ message: 'Invalid credentials.' }, { status: 401 });
+      return NextResponse.json(
+        { message: backendPayload?.message || 'Login failed.' },
+        { status: authRes.status },
+      );
     }
 
-    const authData = (await authRes.json()) as BackendLoginResponse;
-    if (!authData.success || !authData.data?.accessToken || !authData.data.admin?.role) {
-      return NextResponse.json({ message: authData.message || 'Login failed.' }, { status: 401 });
+    const authData = backendPayload as BackendLoginResponse | null;
+    if (!authData?.success || !authData.data?.accessToken || !authData.data.admin?.role) {
+      return NextResponse.json({ message: authData?.message || 'Login failed.' }, { status: 401 });
     }
 
     const role = authData.data.admin.role;

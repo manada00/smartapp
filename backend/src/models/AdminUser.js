@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const adminUserSchema = new mongoose.Schema(
   {
@@ -26,5 +27,12 @@ const adminUserSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+adminUserSchema.pre('save', async function(next) {
+  if (!this.isModified('passwordHash')) return next();
+  if (typeof this.passwordHash === 'string' && this.passwordHash.startsWith('$2')) return next();
+  this.passwordHash = await bcrypt.hash(this.passwordHash, 10);
+  next();
+});
 
 module.exports = mongoose.model('AdminUser', adminUserSchema);

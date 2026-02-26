@@ -40,13 +40,18 @@ router.post(
       await ensureBootstrapAdmin();
 
       const { email, password } = req.body;
+      console.log('[admin-login] request email:', email);
       const admin = await AdminUser.findOne({ email: email.toLowerCase() });
+      console.log('Admin found:', !!admin);
+      console.log('Password field exists:', !!admin?.passwordHash);
+      console.log('Password received:', password);
 
       if (!admin || !admin.isActive) {
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
       }
 
       const isMatch = await bcrypt.compare(password, admin.passwordHash);
+      console.log('[admin-login] password match:', isMatch);
       if (!isMatch) {
         return res.status(401).json({ success: false, message: 'Invalid credentials' });
       }
