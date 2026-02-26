@@ -3,6 +3,8 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const { protect } = require('../middleware/auth');
 const { PaymentService } = require('../services/payment/paymentService');
+const { PaymentService: PaymentOrchestrationService } = require('../services/paymentService');
+const { OrderService } = require('../services/orderService');
 const {
   PAYMENT_METHODS,
   PAYMENT_STATUSES,
@@ -12,6 +14,8 @@ const { sendOrderConfirmationEmail } = require('../services/email/orderConfirmat
 
 const router = express.Router();
 const paymentService = new PaymentService();
+const paymentOrchestrationService = new PaymentOrchestrationService();
+const orderService = new OrderService();
 
 const persistOrderPaymentState = async (order) => {
   try {
@@ -256,6 +260,48 @@ router.post('/', protect, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.post('/create', protect, async (req, res) => {
+  try {
+    const {
+      items,
+      subtotal,
+      delivery_fee,
+      currency,
+      payment_method,
+      payment_provider,
+    } = req.body;
+
+    const order = await orderService.createOneTimeOrder({
+      userId: req.user._id,
+      items,
+      subtotal,
+      delivery_fee,
+      currency,
+      payment_method,
+      payment_provider,
+    });
+
+    const paymentSession = await paymentOrchestrationService.createOneTimePayment(order);
+    if (paymentSession?.payment_reference) {
+      order.payment_reference = paymentSession.payment_reference;
+      order.paymentReferenceCode = paymentSession.payment_reference;
+      order.payment_provider = paymentSession.provider || payment_provider || 'mock';
+      await order.save();
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: order,
+      payment: paymentSession,
+    });
+  } catch (error) {
+    return res.status(500).json({
       success: false,
       message: error.message,
     });

@@ -14,12 +14,20 @@ type BackendLoginResponse = {
 export async function POST(req: Request) {
   try {
     const isProd = process.env.NODE_ENV === 'production';
+    const origin = req.headers.get('origin');
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const proto = req.headers.get('x-forwarded-proto') || (isProd ? 'https' : 'http');
+
+    if (origin && host && origin !== `${proto}://${host}`) {
+      return NextResponse.json({ message: 'Invalid request origin.' }, { status: 403 });
+    }
+
     const { email, password } = await req.json();
     if (!email || !password) {
       return NextResponse.json({ message: 'Email and password are required.' }, { status: 400 });
     }
 
-    const authRes = await fetch(`${getBackendUrl()}/api/v1/admin/auth/login`, {
+    const authRes = await fetch(`${getBackendUrl()}/api/v1/auth/admin/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -38,9 +46,10 @@ export async function POST(req: Request) {
 
     const role = authData.data.admin.role;
     const response = NextResponse.json({ ok: true, role });
-    response.cookies.set('smartapp_access_token', authData.data.accessToken, { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/' });
-    response.cookies.set('smartapp_role', role, { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/' });
-    response.cookies.set('smartapp_user_email', authData.data.admin.email || email, { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/' });
+    const cookieOptions = { httpOnly: true, secure: isProd, sameSite: 'strict' as const, path: '/', maxAge: 60 * 60 * 8 };
+    response.cookies.set('smartapp_access_token', authData.data.accessToken, cookieOptions);
+    response.cookies.set('smartapp_role', role, cookieOptions);
+    response.cookies.set('smartapp_user_email', authData.data.admin.email || email, cookieOptions);
 
     return response;
   } catch {

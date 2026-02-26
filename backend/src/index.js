@@ -12,6 +12,8 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
 const foodRoutes = require('./routes/food');
 const orderRoutes = require('./routes/orders');
+const subscriptionRoutes = require('./routes/subscriptions');
+const webhookRoutes = require('./routes/webhooks');
 const adminAuthRoutes = require('./routes/adminAuth');
 const adminRoutes = require('./routes/admin');
 
@@ -40,8 +42,15 @@ app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/food', foodRoutes);
 app.use('/api/v1/orders', orderRoutes);
+app.use('/api/v1/subscriptions', subscriptionRoutes);
+app.use('/api/v1/webhooks', webhookRoutes);
 app.use('/api/v1/admin/auth', adminAuthRoutes);
 app.use('/api/v1/admin', adminRoutes);
+
+// Alias routes for future provider integrations
+app.use('/orders', orderRoutes);
+app.use('/subscriptions', subscriptionRoutes);
+app.use('/webhooks', webhookRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

@@ -1,7 +1,8 @@
 import { cookies } from 'next/headers';
+import { API_URL } from '@/lib/config/api';
 
 export function getBackendUrl() {
-  return process.env.BACKEND_API_URL || 'http://localhost:3000';
+  return API_URL;
 }
 
 export async function fetchAdmin(path: string, init?: RequestInit) {

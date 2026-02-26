@@ -10,7 +10,7 @@ const roleRouteAccess: Record<string, string[]> = {
   '/users': ['SUPER_ADMIN', 'SUPPORT_ADMIN'],
 };
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isProtected = protectedRoutes.some((route) => pathname.startsWith(route));
   if (!isProtected) return NextResponse.next();

@@ -11,7 +11,18 @@ const orderSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
+  user_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+  },
   items: [{
+    product_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Food',
+    },
+    name: String,
+    price: Number,
     food: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Food',
@@ -48,8 +59,14 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'cancelled'],
+    enum: ['pending', 'paid', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'cancelled'],
     default: 'pending',
+  },
+  order_type: {
+    type: String,
+    enum: ['one_time', 'subscription'],
+    default: 'one_time',
+    index: true,
   },
   paymentMethod: {
     type: String,
@@ -61,6 +78,22 @@ const orderSchema = new mongoose.Schema({
     enum: ['pending', 'paid', 'failed', 'awaiting_transfer', 'refunded'],
     default: 'pending',
   },
+  payment_status: {
+    type: String,
+    enum: ['pending', 'paid', 'failed', 'awaiting_transfer', 'refunded'],
+    default: 'pending',
+    index: true,
+  },
+  payment_provider: {
+    type: String,
+    default: 'mock',
+  },
+  payment_reference: {
+    type: String,
+    index: true,
+    sparse: true,
+  },
+  payment_webhook_processed_at: Date,
   userEmail: String,
   emailSent: {
     type: Boolean,
@@ -87,10 +120,12 @@ const orderSchema = new mongoose.Schema({
     ref: 'Driver',
   },
   subtotal: Number,
+  delivery_fee: Number,
   deliveryFee: Number,
   discount: { type: Number, default: 0 },
   walletUsed: { type: Number, default: 0 },
   total: Number,
+  currency: { type: String, default: 'EGP' },
   amountDue: Number,
   promoCode: String,
   specialInstructions: String,
@@ -115,6 +150,15 @@ const orderSchema = new mongoose.Schema({
     feedbackTags: [String],
     createdAt: Date,
   },
+  created_at: {
+    type: Date,
+    default: Date.now,
+    index: true,
+  },
+  updated_at: {
+    type: Date,
+    default: Date.now,
+  },
 }, {
   timestamps: true,
 });
@@ -126,7 +170,50 @@ orderSchema.pre('validate', async function(next) {
     const count = await mongoose.model('Order').countDocuments();
     this.orderNumber = `SF-${year}-${String(count + 1).padStart(6, '0')}`;
   }
+
+  if (!this.user_id && this.user) {
+    this.user_id = this.user;
+  }
+
+  if (!this.user && this.user_id) {
+    this.user = this.user_id;
+  }
+
+  if (this.delivery_fee == null && this.deliveryFee != null) {
+    this.delivery_fee = this.deliveryFee;
+  }
+
+  if (this.deliveryFee == null && this.delivery_fee != null) {
+    this.deliveryFee = this.delivery_fee;
+  }
+
+  if (!this.payment_status && this.paymentStatus) {
+    this.payment_status = this.paymentStatus;
+  }
+
+  if (!this.paymentStatus && this.payment_status) {
+    this.paymentStatus = this.payment_status;
+  }
+
+  if (!this.payment_reference && this.paymentReferenceCode) {
+    this.payment_reference = this.paymentReferenceCode;
+  }
+
+  if (!this.paymentReferenceCode && this.payment_reference) {
+    this.paymentReferenceCode = this.payment_reference;
+  }
+
+  if (!this.created_at) {
+    this.created_at = this.createdAt || new Date();
+  }
+
+  this.updated_at = new Date();
+
   next();
 });
+
+orderSchema.index({ user_id: 1, created_at: -1 });
+orderSchema.index({ payment_status: 1 });
+orderSchema.index({ created_at: -1 });
 
 module.exports = mongoose.model('Order', orderSchema);
