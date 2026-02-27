@@ -13,6 +13,7 @@ async function forward(request: NextRequest, path: string[]) {
 
   const response = await fetch(targetUrl.toString(), {
     method: request.method,
+    cache: 'no-store',
     headers: {
       ...(auth ? { Authorization: auth } : {}),
       ...(contentType ? { 'Content-Type': contentType } : {}),
@@ -24,6 +25,9 @@ async function forward(request: NextRequest, path: string[]) {
     status: response.status,
     headers: {
       'Content-Type': response.headers.get('content-type') || 'application/json',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
     },
   });
 }

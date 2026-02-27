@@ -18,8 +18,10 @@ export default function GuidedPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
+    async function load(silent = false) {
+      if (!silent) {
+        setLoading(true);
+      }
       setError('');
       try {
         const response = await apiRequest<ApiListResponse<FoodItem>>('/food?limit=100');
@@ -28,10 +30,20 @@ export default function GuidedPage() {
         setFoods([]);
         setError(e instanceof Error ? e.message : 'Failed to load recommendations.');
       } finally {
-        setLoading(false);
+        if (!silent) {
+          setLoading(false);
+        }
       }
     }
     load();
+
+    const intervalId = window.setInterval(() => {
+      void load(true);
+    }, 15000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   const visibleFoods = useMemo(() => filterFoodsByMood(foods, selectedMood).slice(0, 8), [foods, selectedMood]);

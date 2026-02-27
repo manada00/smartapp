@@ -20,6 +20,7 @@ export async function apiRequest<T>(path: string, options?: RequestOptions): Pro
     try {
       const response = await fetch(endpoint, {
         method: options?.method || 'GET',
+        cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),

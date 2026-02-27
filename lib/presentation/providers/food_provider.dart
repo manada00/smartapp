@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,20 +10,28 @@ import '../../data/models/food_model.dart';
 import 'auth_provider.dart';
 
 final categoriesProvider =
-    StateNotifierProvider<CategoriesNotifier, AsyncValue<List<CategoryModel>>>((
-      ref,
-    ) {
-      return CategoriesNotifier(ref.watch(dioClientProvider))..loadCategories();
-    });
+    StateNotifierProvider<CategoriesNotifier, AsyncValue<List<CategoryModel>>>(
+      (ref) {
+        return CategoriesNotifier(ref.watch(dioClientProvider));
+      },
+    );
 
-class CategoriesNotifier
-    extends StateNotifier<AsyncValue<List<CategoryModel>>> {
-  CategoriesNotifier(this._dioClient) : super(const AsyncValue.loading());
+class CategoriesNotifier extends StateNotifier<AsyncValue<List<CategoryModel>>> {
+  CategoriesNotifier(this._dioClient) : super(const AsyncValue.loading()) {
+    loadCategories();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => loadCategories(silent: true),
+    );
+  }
 
   final DioClient _dioClient;
+  Timer? _refreshTimer;
 
-  Future<void> loadCategories() async {
-    state = const AsyncValue.loading();
+  Future<void> loadCategories({bool silent = false}) async {
+    if (!silent) {
+      state = const AsyncValue.loading();
+    }
     try {
       final response = await _dioClient.get(ApiConstants.categories);
       final list = (response.data['data'] as List<dynamic>? ?? [])
@@ -35,24 +45,40 @@ class CategoriesNotifier
       state = AsyncValue.error(e, st);
     }
   }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 }
 
-final foodsProvider =
-    StateNotifierProvider.family<
-      FoodsNotifier,
-      AsyncValue<List<FoodModel>>,
-      String?
-    >((ref, categoryId) {
-      return FoodsNotifier(ref.watch(dioClientProvider))..loadFoods(categoryId);
+final foodsProvider = StateNotifierProvider.autoDispose
+    .family<FoodsNotifier, AsyncValue<List<FoodModel>>, String?>((
+      ref,
+      categoryId,
+    ) {
+      return FoodsNotifier(ref.watch(dioClientProvider), categoryId);
     });
 
 class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
-  FoodsNotifier(this._dioClient) : super(const AsyncValue.loading());
+  FoodsNotifier(this._dioClient, this._categoryId)
+    : super(const AsyncValue.loading()) {
+    loadFoods(_categoryId);
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => loadFoods(_categoryId, silent: true),
+    );
+  }
 
   final DioClient _dioClient;
+  final String? _categoryId;
+  Timer? _refreshTimer;
 
-  Future<void> loadFoods(String? categoryId) async {
-    state = const AsyncValue.loading();
+  Future<void> loadFoods(String? categoryId, {bool silent = false}) async {
+    if (!silent) {
+      state = const AsyncValue.loading();
+    }
     try {
       final response = await _dioClient.get(
         ApiConstants.foods,
@@ -74,8 +100,13 @@ class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
       state = AsyncValue.error(e, st);
     }
   }
-}
 
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+}
 final foodDetailProvider = FutureProvider.family<FoodModel, String>((
   ref,
   foodId,

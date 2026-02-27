@@ -24,8 +24,10 @@ export default function MealsPage() {
   }, []);
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
+    async function load(silent = false) {
+      if (!silent) {
+        setLoading(true);
+      }
       setError('');
       try {
         const [foodsRes, categoriesRes] = await Promise.all([
@@ -39,10 +41,20 @@ export default function MealsPage() {
         setCategories([]);
         setError(e instanceof Error ? e.message : 'Failed to load meals.');
       } finally {
-        setLoading(false);
+        if (!silent) {
+          setLoading(false);
+        }
       }
     }
     load();
+
+    const intervalId = window.setInterval(() => {
+      void load(true);
+    }, 15000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, [category]);
 
   const visibleFoods = useMemo(() => {
