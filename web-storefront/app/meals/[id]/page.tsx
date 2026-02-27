@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiRequest } from '@/lib/api';
-import { findMockFoodById } from '@/lib/mock-drinks-sweets';
 import { storage } from '@/lib/storage';
 import type { CartItem, FoodItem } from '@/lib/types';
 
@@ -38,12 +37,6 @@ export default function MealDetailPage() {
   useEffect(() => {
     async function loadFood() {
       setLoading(true);
-      const mockItem = findMockFoodById(params.id);
-      if (mockItem) {
-        setFood(mockItem);
-        setLoading(false);
-        return;
-      }
       try {
         const response = await apiRequest<ApiItemResponse<FoodItem>>(`/food/${params.id}`);
         setFood(response.data);

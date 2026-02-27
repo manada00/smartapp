@@ -4,11 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { apiRequest } from '@/lib/api';
 import { useLanguage } from '@/components/language-provider';
-import {
-  drinksSweetsCategoryId,
-  mockDrinksSweetsCategories,
-  mockDrinksSweetsFoods,
-} from '@/lib/mock-drinks-sweets';
 import type { Category, FoodItem } from '@/lib/types';
 
 type ApiListResponse<T> = { data: T[] };
@@ -34,21 +29,8 @@ export default function MealsPage() {
           apiRequest<ApiListResponse<FoodItem>>(`/food?limit=100${category ? `&category=${category}` : ''}`),
           apiRequest<ApiListResponse<Category>>('/food/categories'),
         ]);
-        const backendFoods = foodsRes.data || [];
-        const allFoods = [...backendFoods, ...mockDrinksSweetsFoods];
-        const filteredFoods = category
-          ? category === drinksSweetsCategoryId
-            ? allFoods.filter((f) =>
-                [
-                  drinksSweetsCategoryId,
-                  ...mockDrinksSweetsCategories.map((c) => c._id),
-                ].includes(f.category?._id || ''),
-              )
-            : allFoods.filter((f) => f.category?._id === category)
-          : allFoods;
-
-        setFoods(filteredFoods);
-        setCategories([...(categoriesRes.data || []), ...mockDrinksSweetsCategories]);
+        setFoods(foodsRes.data || []);
+        setCategories(categoriesRes.data || []);
       } finally {
         setLoading(false);
       }

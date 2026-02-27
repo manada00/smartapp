@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { apiRequest } from '@/lib/api';
 import { useLanguage } from '@/components/language-provider';
 import { filterFoodsByMood, guidedMoods } from '@/lib/guided-moods';
-import { mockDrinksSweetsFoods } from '@/lib/mock-drinks-sweets';
 import type { FoodItem } from '@/lib/types';
 
 type ApiListResponse<T> = { data: T[] };
@@ -21,7 +20,7 @@ export default function GuidedPage() {
       setLoading(true);
       try {
         const response = await apiRequest<ApiListResponse<FoodItem>>('/food?limit=100');
-        setFoods([...(response.data || []), ...mockDrinksSweetsFoods]);
+        setFoods(response.data || []);
       } finally {
         setLoading(false);
       }

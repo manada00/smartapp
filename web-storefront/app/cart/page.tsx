@@ -22,21 +22,46 @@ export default function CartPage() {
   }
 
   return (
-    <section className="section">
-      <h1>Cart</h1>
-      <div className="card">
-        {items.length === 0 ? <p className="muted">Your cart is empty.</p> : null}
-        {items.map((item) => (
-          <div className="toolbar" key={item.id}>
-            <strong>{item.name}</strong>
-            <span className="muted">{item.price} EGP</span>
-            <button className="btn secondary" onClick={() => updateQuantity(item.id, -1)}>-</button>
-            <span>{item.quantity}</span>
-            <button className="btn secondary" onClick={() => updateQuantity(item.id, 1)}>+</button>
+    <section className="section cart-luxury-page">
+      <div className="cart-luxury-hero">
+        <h1>Your Cart</h1>
+        <p className="muted">A refined final step before your premium healthy order.</p>
+      </div>
+
+      <div className="cart-luxury-grid">
+        <div className="card cart-items-card">
+          {items.length === 0 ? <p className="muted">Your cart is empty.</p> : null}
+          {items.map((item) => (
+            <div className="cart-item-row" key={item.id}>
+              <div>
+                <strong>{item.name}</strong>
+                <p className="muted cart-item-price">{item.price} EGP</p>
+              </div>
+              <div className="cart-qty-controls">
+                <button className="btn secondary qty-btn" onClick={() => updateQuantity(item.id, -1)}>-</button>
+                <span className="qty-value">{item.quantity}</span>
+                <button className="btn secondary qty-btn" onClick={() => updateQuantity(item.id, 1)}>+</button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <aside className="card cart-summary-card">
+          <h3>Order Summary</h3>
+          <div className="summary-row">
+            <span className="muted">Subtotal</span>
+            <strong>{total} EGP</strong>
           </div>
-        ))}
-        <h3>Total: {total} EGP</h3>
-        <Link href="/checkout" className="btn">Proceed to Checkout</Link>
+          <div className="summary-row">
+            <span className="muted">Delivery</span>
+            <strong>Calculated at checkout</strong>
+          </div>
+          <div className="summary-row total-row">
+            <span>Total</span>
+            <strong>{total} EGP</strong>
+          </div>
+          <Link href="/checkout" className="btn cart-checkout-btn">Proceed to Checkout</Link>
+        </aside>
       </div>
     </section>
   );
