@@ -9,7 +9,13 @@ export default function SiteHeader() {
   return (
     <header className="top-nav">
       <div className="container nav-inner">
-        <Link href="/" className="brand">SmartApp</Link>
+        <div className="nav-top-row">
+          <Link href="/" className="brand">SmartApp</Link>
+          <div className="lang-switch" role="group" aria-label={t('language')}>
+            <button className={`lang-btn ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>EN</button>
+            <button className={`lang-btn ${lang === 'ar' ? 'active' : ''}`} onClick={() => setLang('ar')}>AR</button>
+          </div>
+        </div>
         <nav className="nav-links">
           <Link href="/meals">{t('navMeals')}</Link>
           <Link href="/guided">{t('navGuided')}</Link>
@@ -18,10 +24,6 @@ export default function SiteHeader() {
           <Link href="/cart">{t('navCart')}</Link>
           <Link href="/login">{t('navLogin')}</Link>
         </nav>
-        <div className="lang-switch" role="group" aria-label={t('language')}>
-          <button className={`lang-btn ${lang === 'en' ? 'active' : ''}`} onClick={() => setLang('en')}>EN</button>
-          <button className={`lang-btn ${lang === 'ar' ? 'active' : ''}`} onClick={() => setLang('ar')}>AR</button>
-        </div>
       </div>
     </header>
   );

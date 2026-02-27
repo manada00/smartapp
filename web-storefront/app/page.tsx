@@ -9,6 +9,7 @@ export default function HomePage() {
   return (
     <>
       <section className="hero entry-hero">
+        <div className="entry-intention-chip">Smart wellness journey</div>
         <div className="hero-visual-strip" aria-hidden>
           <img src="https://images.unsplash.com/photo-1511690743698-d9d85f2fbf38?auto=format&fit=crop&w=900&q=80" alt="" />
           <img src="https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=900&q=80" alt="" />
@@ -17,13 +18,13 @@ export default function HomePage() {
         <h1>{t('homeTitle')}</h1>
         <p>{t('homeSubtitle')}</p>
         <div className="entry-grid">
-          <Link href="/meals" className="entry-card">
+          <Link href="/meals" className="entry-card entry-card-visual" style={{ backgroundImage: 'linear-gradient(rgba(20,20,20,.35), rgba(20,20,20,.52)), url(https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=1200&q=80)' }}>
             <h3>{t('knowWhatIWant')}</h3>
-            <p className="muted">{t('knowWhatIWantDesc')}</p>
+            <p>{t('knowWhatIWantDesc')}</p>
           </Link>
-          <Link href="/guided" className="entry-card">
+          <Link href="/guided" className="entry-card entry-card-visual" style={{ backgroundImage: 'linear-gradient(rgba(20,20,20,.35), rgba(20,20,20,.52)), url(https://images.unsplash.com/photo-1547592166-23ac45744acd?auto=format&fit=crop&w=1200&q=80)' }}>
             <h3>{t('helpMeChoose')}</h3>
-            <p className="muted">{t('helpMeChooseDesc')}</p>
+            <p>{t('helpMeChooseDesc')}</p>
           </Link>
         </div>
         <div className="home-visual-sections">

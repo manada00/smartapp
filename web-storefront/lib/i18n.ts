@@ -10,8 +10,8 @@ const en: Dictionary = {
   navCart: 'Cart',
   navLogin: 'Login',
   language: 'Language',
-  homeTitle: 'How would you like to order today?',
-  homeSubtitle: 'Choose your path and switch anytime.',
+  homeTitle: 'Let’s choose what your body needs today.',
+  homeSubtitle: 'Take a calm moment, then follow the path that fits you best.',
   knowWhatIWant: 'I know what I want',
   knowWhatIWantDesc: 'Go to full menu browsing with categories, search, filters, and Drinks & Sweets.',
   helpMeChoose: 'Help me choose',
@@ -35,7 +35,7 @@ const en: Dictionary = {
   smartScoreCravingControl: 'Craving Control',
   addToCart: 'Add to Cart',
   guidedTitle: 'Help me choose',
-  guidedSubtitle: 'Pick a mood and get curated meals, drinks, and sweets using SmartScore alignment.',
+  guidedSubtitle: 'Choose your mood and we will gently guide you to meals that match your needs.',
   loadingRecommendations: 'Loading recommendations...',
 };
 
@@ -47,8 +47,8 @@ const ar: Dictionary = {
   navCart: 'السلة',
   navLogin: 'تسجيل الدخول',
   language: 'اللغة',
-  homeTitle: 'كيف تحب تطلب اليوم؟',
-  homeSubtitle: 'اختر الطريقة المناسبة ويمكنك التبديل في أي وقت.',
+  homeTitle: 'دعنا نختار ما يحتاجه جسمك اليوم.',
+  homeSubtitle: 'خذ لحظة هادئة ثم اختر المسار الأنسب لك.',
   knowWhatIWant: 'أنا عارف أريد ماذا',
   knowWhatIWantDesc: 'انتقل لتصفح القائمة بالكامل مع التصنيفات والبحث والفلاتر وقسم المشروبات والحلويات.',
   helpMeChoose: 'ساعدني أختار',
@@ -72,7 +72,7 @@ const ar: Dictionary = {
   smartScoreCravingControl: 'التحكم في الرغبة',
   addToCart: 'أضف إلى السلة',
   guidedTitle: 'ساعدني أختار',
-  guidedSubtitle: 'اختر مزاجك لتحصل على وجبات ومشروبات وحلويات مناسبة بناءً على SmartScore.',
+  guidedSubtitle: 'اختر مزاجك وسنرشدك بهدوء إلى وجبات تناسب احتياجك.',
   loadingRecommendations: 'جارٍ تحميل الاقتراحات...',
 };
 

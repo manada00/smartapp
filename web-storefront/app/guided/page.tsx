@@ -48,6 +48,34 @@ export default function GuidedPage() {
 
   const visibleFoods = useMemo(() => filterFoodsByMood(foods, selectedMood).slice(0, 8), [foods, selectedMood]);
 
+  function moodSubtitle(id: string): string {
+    if (lang === 'ar') {
+      const ar: Record<string, string> = {
+        energy: 'دعم طاقة مستمرة ونشاط متوازن',
+        light: 'اختيارات خفيفة ومريحة للهضم',
+        muscle: 'بروتين أفضل للتعافي والقوة',
+        comfort: 'وجبات دافئة تمنحك راحة',
+        focus: 'مكونات تساعد على الصفاء والتركيز',
+        'smart-sweet': 'مذاق حلو بخيارات أذكى',
+        filling: 'خيارات مشبعة بدون ثقل',
+        balance: 'توازن يومي لطاقة ثابتة',
+      };
+      return ar[id] || '';
+    }
+
+    const en: Record<string, string> = {
+      energy: 'Steady fuel for your day',
+      light: 'Lighter choices, easy digestion',
+      muscle: 'Protein-forward recovery support',
+      comfort: 'Warm meals for calm comfort',
+      focus: 'Clear, focused daily support',
+      'smart-sweet': 'Sweet cravings, smarter choices',
+      filling: 'Deep satiety without heaviness',
+      balance: 'Daily harmony and steady energy',
+    };
+    return en[id] || '';
+  }
+
   return (
     <section className="section">
       <div className="toolbar">
@@ -64,8 +92,9 @@ export default function GuidedPage() {
             onClick={() => setSelectedMood(mood.id)}
             style={{ backgroundImage: `linear-gradient(rgba(20,20,20,0.35), rgba(20,20,20,0.45)), url(${mood.image})` }}
           >
-            <span>{mood.emoji}</span>
-            <span>{lang === 'ar' ? mood.titleAr : mood.title}</span>
+            <span className="guided-mood-emoji">{mood.emoji}</span>
+            <span className="guided-mood-title">{lang === 'ar' ? mood.titleAr : mood.title}</span>
+            <span className="guided-mood-subtitle">{moodSubtitle(mood.id)}</span>
           </button>
         ))}
       </div>
