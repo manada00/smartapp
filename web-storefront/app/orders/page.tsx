@@ -32,28 +32,30 @@ export default function OrdersPage() {
       <h1>Orders</h1>
       {error ? <p style={{ color: '#b42318' }}>{error}</p> : null}
       <div className="card">
-        <table>
-          <thead>
-            <tr>
-              <th>Order</th>
-              <th>Status</th>
-              <th>Payment</th>
-              <th>Total</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders.map((order) => (
-              <tr key={order._id}>
-                <td>{order._id}</td>
-                <td>{order.status}</td>
-                <td>{order.paymentStatus || '-'}</td>
-                <td>{order.total} EGP</td>
-                <td>{new Date(order.createdAt).toLocaleString()}</td>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Status</th>
+                <th>Payment</th>
+                <th>Total</th>
+                <th>Date</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {orders.map((order) => (
+                <tr key={order._id}>
+                  <td>{order._id}</td>
+                  <td>{order.status}</td>
+                  <td>{order.paymentStatus || '-'}</td>
+                  <td>{order.total} EGP</td>
+                  <td>{new Date(order.createdAt).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );
