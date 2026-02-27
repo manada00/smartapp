@@ -1,4 +1,4 @@
-const DEFAULT_API_URL = 'https://smartapp-kohl.vercel.app/api/v1';
+export const DEFAULT_API_URL = 'https://smartapp-kohl.vercel.app/api/v1';
 const envApiUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
 
 const isLocalApi = Boolean(
