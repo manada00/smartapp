@@ -1,0 +1,63 @@
+export type Lang = 'en' | 'ar';
+
+type Dictionary = Record<string, string>;
+
+const en: Dictionary = {
+  navMeals: 'Meals',
+  navGuided: 'Help Me Choose',
+  navSubscriptions: 'Subscriptions',
+  navOrders: 'Orders',
+  navCart: 'Cart',
+  navLogin: 'Login',
+  language: 'Language',
+  homeTitle: 'How would you like to order today?',
+  homeSubtitle: 'Choose your path and switch anytime.',
+  knowWhatIWant: 'I know what I want',
+  knowWhatIWantDesc: 'Go to full menu browsing with categories, search, filters, and Drinks & Sweets.',
+  helpMeChoose: 'Help me choose',
+  helpMeChooseDesc: 'Use mood cards for SmartScore-based recommendations.',
+  categoryInspirations: 'Category Inspirations',
+  categoryInspirationsDesc: 'Bowls, protein meals, fresh greens, and clean plating.',
+  drinksSweets: 'Drinks & Sweets',
+  drinksSweetsDesc: 'Smoothies and smart desserts with balanced nutrition cues.',
+  browseMenuInstead: 'Browse Menu Instead',
+  mealsTitle: 'Meals',
+  searchMeals: 'Search meals',
+  allCategories: 'All Categories',
+  guidedTitle: 'Help me choose',
+  guidedSubtitle: 'Pick a mood and get curated meals, drinks, and sweets using SmartScore alignment.',
+  loadingRecommendations: 'Loading recommendations...',
+};
+
+const ar: Dictionary = {
+  navMeals: 'الوجبات',
+  navGuided: 'ساعدني أختار',
+  navSubscriptions: 'الاشتراكات',
+  navOrders: 'الطلبات',
+  navCart: 'السلة',
+  navLogin: 'تسجيل الدخول',
+  language: 'اللغة',
+  homeTitle: 'كيف تحب تطلب اليوم؟',
+  homeSubtitle: 'اختر الطريقة المناسبة ويمكنك التبديل في أي وقت.',
+  knowWhatIWant: 'أنا عارف أريد ماذا',
+  knowWhatIWantDesc: 'انتقل لتصفح القائمة بالكامل مع التصنيفات والبحث والفلاتر وقسم المشروبات والحلويات.',
+  helpMeChoose: 'ساعدني أختار',
+  helpMeChooseDesc: 'استخدم بطاقات المزاج للحصول على اقتراحات حسب SmartScore.',
+  categoryInspirations: 'إلهام التصنيفات',
+  categoryInspirationsDesc: 'أطباق متوازنة، بروتين، خضار طازجة وتقديم نظيف.',
+  drinksSweets: 'المشروبات والحلويات',
+  drinksSweetsDesc: 'سموثي وحلويات ذكية بإشارات تغذية متوازنة.',
+  browseMenuInstead: 'تصفح القائمة بدلاً من ذلك',
+  mealsTitle: 'الوجبات',
+  searchMeals: 'ابحث عن وجبات',
+  allCategories: 'كل التصنيفات',
+  guidedTitle: 'ساعدني أختار',
+  guidedSubtitle: 'اختر مزاجك لتحصل على وجبات ومشروبات وحلويات مناسبة بناءً على SmartScore.',
+  loadingRecommendations: 'جارٍ تحميل الاقتراحات...',
+};
+
+const dictionaries: Record<Lang, Dictionary> = { en, ar };
+
+export function t(lang: Lang, key: string): string {
+  return dictionaries[lang][key] ?? key;
+}

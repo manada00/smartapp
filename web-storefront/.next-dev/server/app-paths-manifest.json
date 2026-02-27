@@ -1,7 +1,7 @@
 {
-  "/orders/page": "app/orders/page.js",
-  "/meals/[id]/page": "app/meals/[id]/page.js",
-  "/cart/page": "app/cart/page.js",
-  "/checkout/page": "app/checkout/page.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/guided/page": "app/guided/page.js",
+  "/meals/page": "app/meals/page.js",
+  "/login/page": "app/login/page.js",
+  "/subscriptions/page": "app/subscriptions/page.js"
 }

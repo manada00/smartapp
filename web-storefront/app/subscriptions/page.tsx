@@ -46,7 +46,7 @@ export default function SubscriptionsPage() {
             <h3>{plan.title}</h3>
             <p className="muted">{plan.description}</p>
             <button className="btn" onClick={() => subscribe(plan.id)} disabled={loadingPlan === plan.id}>
-              {loadingPlan === plan.id ? 'Starting...' : 'Choose Plan'}
+              {loadingPlan === plan.id ? 'Starting...' : 'Start Subscription'}
             </button>
           </div>
         ))}

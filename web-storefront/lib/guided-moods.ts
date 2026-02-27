@@ -4,17 +4,19 @@ export type GuidedMood = {
   id: string;
   emoji: string;
   title: string;
+  titleAr: string;
+  image: string;
 };
 
 export const guidedMoods: GuidedMood[] = [
-  { id: 'energy', emoji: '⚡', title: 'I want energy' },
-  { id: 'light', emoji: '🥗', title: 'I want something light' },
-  { id: 'muscle', emoji: '💪', title: 'I want to build muscle' },
-  { id: 'comfort', emoji: '🫶', title: 'I want comfort' },
-  { id: 'focus', emoji: '🧠', title: 'I want focus' },
-  { id: 'smart-sweet', emoji: '🍫', title: 'I want something sweet but smart' },
-  { id: 'filling', emoji: '🍽️', title: 'I want something filling' },
-  { id: 'balance', emoji: '⚖️', title: 'I want balance' },
+  { id: 'energy', emoji: '⚡', title: 'I want energy', titleAr: 'أريد طاقة', image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80' },
+  { id: 'light', emoji: '🥗', title: 'I want something light', titleAr: 'أريد شيئًا خفيفًا', image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=900&q=80' },
+  { id: 'muscle', emoji: '💪', title: 'I want to build muscle', titleAr: 'أريد بناء عضل', image: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=900&q=80' },
+  { id: 'comfort', emoji: '🫶', title: 'I want comfort', titleAr: 'أريد راحة', image: 'https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=900&q=80' },
+  { id: 'focus', emoji: '🧠', title: 'I want focus', titleAr: 'أريد تركيز', image: 'https://images.unsplash.com/photo-1505576399279-565b52d4ac71?auto=format&fit=crop&w=900&q=80' },
+  { id: 'smart-sweet', emoji: '🍫', title: 'I want something sweet but smart', titleAr: 'أريد شيئًا حلوًا لكن ذكيًا', image: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?auto=format&fit=crop&w=900&q=80' },
+  { id: 'filling', emoji: '🍽️', title: 'I want something filling', titleAr: 'أريد وجبة مُشبعة', image: 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?auto=format&fit=crop&w=900&q=80' },
+  { id: 'balance', emoji: '⚖️', title: 'I want balance', titleAr: 'أريد توازن', image: 'https://images.unsplash.com/photo-1490474418585-ba9bad8fd0ea?auto=format&fit=crop&w=900&q=80' },
 ];
 
 export function filterFoodsByMood(foods: FoodItem[], moodId: string): FoodItem[] {

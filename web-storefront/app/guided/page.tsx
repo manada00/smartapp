@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { apiRequest } from '@/lib/api';
+import { useLanguage } from '@/components/language-provider';
 import { filterFoodsByMood, guidedMoods } from '@/lib/guided-moods';
 import { mockDrinksSweetsFoods } from '@/lib/mock-drinks-sweets';
 import type { FoodItem } from '@/lib/types';
@@ -10,6 +11,7 @@ import type { FoodItem } from '@/lib/types';
 type ApiListResponse<T> = { data: T[] };
 
 export default function GuidedPage() {
+  const { t, lang } = useLanguage();
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [selectedMood, setSelectedMood] = useState(guidedMoods[0].id);
   const [loading, setLoading] = useState(true);
@@ -32,10 +34,10 @@ export default function GuidedPage() {
   return (
     <section className="section">
       <div className="toolbar">
-        <h1 style={{ margin: 0 }}>Help me choose</h1>
-        <Link href="/meals" className="btn secondary">Browse Menu Instead</Link>
+        <h1 style={{ margin: 0 }}>{t('guidedTitle')}</h1>
+        <Link href="/meals" className="btn secondary">{t('browseMenuInstead')}</Link>
       </div>
-      <p className="muted">Pick a mood and get curated meals, drinks, and sweets using SmartScore alignment.</p>
+      <p className="muted">{t('guidedSubtitle')}</p>
 
       <div className="guided-moods-grid">
         {guidedMoods.map((mood) => (
@@ -43,14 +45,15 @@ export default function GuidedPage() {
             key={mood.id}
             className={`guided-mood-card ${selectedMood === mood.id ? 'active' : ''}`}
             onClick={() => setSelectedMood(mood.id)}
+            style={{ backgroundImage: `linear-gradient(rgba(20,20,20,0.35), rgba(20,20,20,0.45)), url(${mood.image})` }}
           >
             <span>{mood.emoji}</span>
-            <span>{mood.title}</span>
+            <span>{lang === 'ar' ? mood.titleAr : mood.title}</span>
           </button>
         ))}
       </div>
 
-      {loading ? <p className="muted">Loading recommendations...</p> : null}
+      {loading ? <p className="muted">{t('loadingRecommendations')}</p> : null}
       <div className="grid cols-4">
         {visibleFoods.map((food) => (
           <Link key={food._id} href={`/meals/${food._id}`} className="card">

@@ -50,22 +50,25 @@ export default function LoginPage() {
   }
 
   return (
-    <section className="section">
-      <h1>Login</h1>
-      <div className="card" style={{ maxWidth: 420 }}>
-        <p className="muted">Use your existing SmartApp account.</p>
-        <input placeholder="Egypt phone number (10 digits)" value={phone} onChange={(e) => setPhone(e.target.value)} />
-        {sent ? <input placeholder="OTP" value={otp} onChange={(e) => setOtp(e.target.value)} /> : null}
-        {error ? <p style={{ color: '#b42318' }}>{error}</p> : null}
-        {!sent ? (
-          <button className="btn" onClick={sendOtp} disabled={loading || phone.length !== 10}>
-            {loading ? 'Sending...' : 'Send OTP'}
-          </button>
-        ) : (
-          <button className="btn" onClick={verifyOtp} disabled={loading || otp.length !== 6}>
-            {loading ? 'Verifying...' : 'Verify & Login'}
-          </button>
-        )}
+    <section className="login-page">
+      <div className="login-overlay" />
+      <div className="login-card">
+        <h1>Welcome Back</h1>
+        <p className="muted">Your smart choices start here</p>
+        <div className="login-form">
+          <input placeholder="Egypt phone number (10 digits)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          {sent ? <input placeholder="OTP" value={otp} onChange={(e) => setOtp(e.target.value)} /> : null}
+          {error ? <p className="login-error">{error}</p> : null}
+          {!sent ? (
+            <button className="btn login-btn" onClick={sendOtp} disabled={loading || phone.length !== 10}>
+              {loading ? 'Sending...' : 'Send OTP'}
+            </button>
+          ) : (
+            <button className="btn login-btn" onClick={verifyOtp} disabled={loading || otp.length !== 6}>
+              {loading ? 'Verifying...' : 'Verify & Login'}
+            </button>
+          )}
+        </div>
         <p className="muted">New user? <Link href="/signup">Create account</Link></p>
       </div>
     </section>

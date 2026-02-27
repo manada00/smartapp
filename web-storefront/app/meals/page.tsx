@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { apiRequest } from '@/lib/api';
+import { useLanguage } from '@/components/language-provider';
 import {
   drinksSweetsCategoryId,
   mockDrinksSweetsCategories,
@@ -13,6 +14,7 @@ import type { Category, FoodItem } from '@/lib/types';
 type ApiListResponse<T> = { data: T[] };
 
 export default function MealsPage() {
+  const { t } = useLanguage();
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState('');
@@ -63,13 +65,23 @@ export default function MealsPage() {
   return (
     <section className="section">
       <div className="toolbar">
-        <h1 style={{ margin: 0 }}>Meals</h1>
-        <Link href="/guided" className="btn secondary">Help me choose</Link>
+        <h1 style={{ margin: 0 }}>{t('mealsTitle')}</h1>
+        <Link href="/guided" className="btn secondary">{t('helpMeChoose')}</Link>
+      </div>
+      <div className="category-visual-row">
+        <div className="category-visual-card" style={{ backgroundImage: 'linear-gradient(rgba(20,20,20,.2), rgba(20,20,20,.45)), url(https://images.unsplash.com/photo-1498837167922-ddd27525d352?auto=format&fit=crop&w=1200&q=80)' }}>
+          <strong>Fresh Category Picks</strong>
+          <span>Whole-food bowls, grains, greens, and protein-forward plates.</span>
+        </div>
+        <div className="category-visual-card" style={{ backgroundImage: 'linear-gradient(rgba(20,20,20,.2), rgba(20,20,20,.45)), url(https://images.unsplash.com/photo-1464306076886-da185f6a9d05?auto=format&fit=crop&w=1200&q=80)' }}>
+          <strong>Drinks & Sweets</strong>
+          <span>Healthy drinks and smart sweets with clean premium visuals.</span>
+        </div>
       </div>
       <div className="toolbar">
-        <input placeholder="Search meals" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <input placeholder={t('searchMeals')} value={search} onChange={(e) => setSearch(e.target.value)} />
         <select value={category} onChange={(e) => setCategory(e.target.value)}>
-          <option value="">All Categories</option>
+          <option value="">{t('allCategories')}</option>
           {categories.map((c) => (
             <option key={c._id} value={c._id}>{c.name}</option>
           ))}
