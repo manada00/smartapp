@@ -1,0 +1,25 @@
+{
+  "name": "smartapp-web-storefront",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "rm -rf .next .next-dev && NEXT_DISABLE_WEBPACK_CACHE=1 next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "14.2.33",
+    "react": "18.2.0",
+    "react-dom": "18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.57",
+    "@types/react": "18.3.23",
+    "@types/react-dom": "18.3.7",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "14.2.33",
+    "typescript": "^5.7.3"
+  }
+}

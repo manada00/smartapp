@@ -10,6 +10,8 @@ import '../../presentation/screens/profile_setup/health_goals_screen.dart';
 import '../../presentation/screens/profile_setup/dietary_preferences_screen.dart';
 import '../../presentation/screens/profile_setup/daily_routine_screen.dart';
 import '../../presentation/screens/addresses/add_address_screen.dart';
+import '../../presentation/screens/home/entry_decision_screen.dart';
+import '../../presentation/screens/home/guided_mood_screen.dart';
 import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/home/main_shell.dart';
 import '../../presentation/screens/recommendations/recommendations_screen.dart';
@@ -82,39 +84,43 @@ class AppRouter {
         path: Routes.addAddress,
         builder: (context, state) => const AddAddressScreen(),
       ),
+      GoRoute(
+        path: Routes.entry,
+        builder: (context, state) => const EntryDecisionScreen(),
+      ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) => MainShell(child: child),
         routes: [
           GoRoute(
             path: Routes.home,
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: HomeScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: HomeScreen()),
           ),
           GoRoute(
             path: Routes.categories,
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: CategoriesScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: CategoriesScreen()),
           ),
           GoRoute(
             path: Routes.orders,
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: OrdersScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: OrdersScreen()),
           ),
           GoRoute(
             path: Routes.subscriptions,
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: SubscriptionsScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: SubscriptionsScreen()),
           ),
           GoRoute(
             path: Routes.profile,
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: ProfileScreen(),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ProfileScreen()),
+          ),
+          GoRoute(
+            path: Routes.guided,
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: GuidedMoodScreen()),
           ),
         ],
       ),
@@ -219,11 +225,13 @@ class Routes {
   static const dietaryPreferences = '/setup/preferences';
   static const dailyRoutine = '/setup/routine';
   static const addAddress = '/setup/address';
+  static const entry = '/entry';
   static const home = '/home';
   static const categories = '/categories';
   static const orders = '/orders';
   static const subscriptions = '/subscriptions';
   static const profile = '/profile';
+  static const guided = '/guided';
   static const recommendations = '/recommendations';
   static const foodDetail = '/food';
   static const categoryDetail = '/category';

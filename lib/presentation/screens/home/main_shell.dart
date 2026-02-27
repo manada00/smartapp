@@ -17,6 +17,7 @@ class MainShell extends ConsumerWidget {
   int _getSelectedIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
     if (location.startsWith(Routes.home)) return 0;
+    if (location.startsWith(Routes.guided)) return 0;
     if (location.startsWith(Routes.categories)) return 1;
     if (location.startsWith(Routes.orders)) return 2;
     if (location.startsWith(Routes.subscriptions)) return 3;
@@ -42,7 +43,9 @@ class MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cartItemCount = ref.watch(cartItemCountProvider);
-    final supportUnreadCount = ref.watch(supportInboxProvider.select((state) => state.unreadCount));
+    final supportUnreadCount = ref.watch(
+      supportInboxProvider.select((state) => state.unreadCount),
+    );
     final selectedIndex = _getSelectedIndex(context);
     final activeColor = _activeMoodColor(selectedIndex);
 
@@ -121,7 +124,9 @@ class MainShell extends ConsumerWidget {
                       label: context.l10n.tr('profile'),
                       selected: selectedIndex == 4,
                       activeColor: activeColor,
-                      badge: supportUnreadCount > 0 ? '$supportUnreadCount' : null,
+                      badge: supportUnreadCount > 0
+                          ? '$supportUnreadCount'
+                          : null,
                       onTap: () => _onItemTapped(context, 4),
                     ),
                   ),

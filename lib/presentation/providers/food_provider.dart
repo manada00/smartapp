@@ -3,17 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/network/dio_client.dart';
+import '../../data/mock/mock_drinks_sweets.dart';
 import '../../data/models/food_model.dart';
 import 'auth_provider.dart';
 
 final categoriesProvider =
-    StateNotifierProvider<CategoriesNotifier, AsyncValue<List<CategoryModel>>>(
-      (ref) {
-        return CategoriesNotifier(ref.watch(dioClientProvider))..loadCategories();
-      },
-    );
+    StateNotifierProvider<CategoriesNotifier, AsyncValue<List<CategoryModel>>>((
+      ref,
+    ) {
+      return CategoriesNotifier(ref.watch(dioClientProvider))..loadCategories();
+    });
 
-class CategoriesNotifier extends StateNotifier<AsyncValue<List<CategoryModel>>> {
+class CategoriesNotifier
+    extends StateNotifier<AsyncValue<List<CategoryModel>>> {
   CategoriesNotifier(this._dioClient) : super(const AsyncValue.loading());
 
   final DioClient _dioClient;
@@ -26,7 +28,7 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<CategoryModel>>> 
           .whereType<Map<String, dynamic>>()
           .map(_mapCategory)
           .toList();
-      state = AsyncValue.data(list);
+      state = AsyncValue.data([...list, ...drinksAndSweetsMockCategories()]);
     } on DioException catch (e, st) {
       state = AsyncValue.error(ApiException.fromDioException(e), st);
     } catch (e, st) {
@@ -35,10 +37,14 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<CategoryModel>>> 
   }
 }
 
-final foodsProvider = StateNotifierProvider.family<FoodsNotifier,
-    AsyncValue<List<FoodModel>>, String?>((ref, categoryId) {
-  return FoodsNotifier(ref.watch(dioClientProvider))..loadFoods(categoryId);
-});
+final foodsProvider =
+    StateNotifierProvider.family<
+      FoodsNotifier,
+      AsyncValue<List<FoodModel>>,
+      String?
+    >((ref, categoryId) {
+      return FoodsNotifier(ref.watch(dioClientProvider))..loadFoods(categoryId);
+    });
 
 class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
   FoodsNotifier(this._dioClient) : super(const AsyncValue.loading());
@@ -51,7 +57,8 @@ class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
       final response = await _dioClient.get(
         ApiConstants.foods,
         queryParameters: {
-          if (categoryId != null && categoryId.isNotEmpty) 'category': categoryId,
+          if (categoryId != null && categoryId.isNotEmpty)
+            'category': categoryId,
           'limit': 100,
         },
       );
@@ -60,7 +67,7 @@ class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
           .whereType<Map<String, dynamic>>()
           .map(_mapFood)
           .toList();
-      state = AsyncValue.data(foods);
+      state = AsyncValue.data([...foods, ..._mockFoodsForCategory(categoryId)]);
     } on DioException catch (e, st) {
       state = AsyncValue.error(ApiException.fromDioException(e), st);
     } catch (e, st) {
@@ -69,34 +76,52 @@ class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
   }
 }
 
-final foodDetailProvider = FutureProvider.family<FoodModel, String>((ref, foodId) async {
+final foodDetailProvider = FutureProvider.family<FoodModel, String>((
+  ref,
+  foodId,
+) async {
+  final mockItem = _findMockFoodById(foodId);
+  if (mockItem != null) return mockItem;
+
   final dio = ref.watch(dioClientProvider);
-  final response = await dio.get('${ApiConstants.foods}/$foodId');
-  final data = response.data['data'] as Map<String, dynamic>?;
-  if (data == null) {
-    throw Exception('Food not found');
+  try {
+    final response = await dio.get('${ApiConstants.foods}/$foodId');
+    final data = response.data['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      throw Exception('Food not found');
+    }
+    return _mapFood(data);
+  } catch (_) {
+    final fallback = _findMockFoodById(foodId);
+    if (fallback != null) return fallback;
+    rethrow;
   }
-  return _mapFood(data);
 });
 
-final recommendationsProvider = FutureProvider.family<
-    Map<String, List<FoodModel>>, FeelingType>((ref, feeling) async {
-  final dio = ref.watch(dioClientProvider);
-  final response = await dio.get(
-    '${ApiConstants.recommendations}/${_feelingToApi(feeling)}',
-  );
+final recommendationsProvider =
+    FutureProvider.family<Map<String, List<FoodModel>>, FeelingType>((
+      ref,
+      feeling,
+    ) async {
+      final dio = ref.watch(dioClientProvider);
+      final response = await dio.get(
+        '${ApiConstants.recommendations}/${_feelingToApi(feeling)}',
+      );
 
-  final data = response.data['data'] as Map<String, dynamic>? ?? {};
-  return {
-    'perfect': _mapFoodList(data['perfect']),
-    'good': _mapFoodList(data['good']),
-    'notIdeal': _mapFoodList(data['notIdeal']),
-  };
-});
+      final data = response.data['data'] as Map<String, dynamic>? ?? {};
+      return {
+        'perfect': _mapFoodList(data['perfect']),
+        'good': _mapFoodList(data['good']),
+        'notIdeal': _mapFoodList(data['notIdeal']),
+      };
+    });
 
 final popularFoodsProvider = FutureProvider<List<FoodModel>>((ref) async {
   final dio = ref.watch(dioClientProvider);
-  final response = await dio.get(ApiConstants.foods, queryParameters: {'limit': 20});
+  final response = await dio.get(
+    ApiConstants.foods,
+    queryParameters: {'limit': 20},
+  );
   return (response.data['data'] as List<dynamic>? ?? [])
       .whereType<Map<String, dynamic>>()
       .map(_mapFood)
@@ -115,28 +140,33 @@ final homeConfigProvider = FutureProvider<HomeConfigModel>((ref) async {
     announcementMessage: _asString(data['announcementMessage']),
     promotions: (data['promotions'] as List<dynamic>? ?? [])
         .whereType<Map<String, dynamic>>()
-        .map((item) => HomePromotion(
-              title: _asString(item['title']),
-              message: _asString(item['message']),
-              imageUrl: _asString(item['imageUrl']),
-              ctaText: _asString(item['ctaText']),
-              isActive: _asBool(item['isActive']),
-            ))
+        .map(
+          (item) => HomePromotion(
+            title: _asString(item['title']),
+            message: _asString(item['message']),
+            imageUrl: _asString(item['imageUrl']),
+            ctaText: _asString(item['ctaText']),
+            isActive: _asBool(item['isActive']),
+          ),
+        )
         .where((item) => item.isActive)
         .toList(),
-    moods: (data['moods'] as List<dynamic>? ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map((item) => HomeMood(
-              type: _asString(item['type']),
-              title: _asString(item['title']),
-              subtitle: _asString(item['subtitle']),
-              emoji: _asString(item['emoji']),
-              isVisible: _asBool(item['isVisible'], fallback: true),
-              sortOrder: _asInt(item['sortOrder']),
-            ))
-        .where((item) => item.isVisible)
-        .toList()
-      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
+    moods:
+        (data['moods'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .map(
+              (item) => HomeMood(
+                type: _asString(item['type']),
+                title: _asString(item['title']),
+                subtitle: _asString(item['subtitle']),
+                emoji: _asString(item['emoji']),
+                isVisible: _asBool(item['isVisible'], fallback: true),
+                sortOrder: _asInt(item['sortOrder']),
+              ),
+            )
+            .where((item) => item.isVisible)
+            .toList()
+          ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder)),
     popularFoodIds: (data['popularFoodIds'] as List<dynamic>? ?? [])
         .map((item) => _asString(item))
         .where((item) => item.isNotEmpty)
@@ -144,8 +174,10 @@ final homeConfigProvider = FutureProvider<HomeConfigModel>((ref) async {
   );
 });
 
-final searchFoodsProvider =
-    FutureProvider.family<List<FoodModel>, String>((ref, query) async {
+final searchFoodsProvider = FutureProvider.family<List<FoodModel>, String>((
+  ref,
+  query,
+) async {
   if (query.isEmpty) return [];
   final dio = ref.watch(dioClientProvider);
   final response = await dio.get('${ApiConstants.search}/$query');
@@ -169,6 +201,20 @@ class FavoritesNotifier extends StateNotifier<Set<String>> {
   }
 
   bool isFavorite(String foodId) => state.contains(foodId);
+}
+
+List<FoodModel> _mockFoodsForCategory(String? categoryId) {
+  final all = drinksAndSweetsMockFoods();
+  if (categoryId == null || categoryId.isEmpty) return all;
+  if (categoryId == drinksAndSweetsCategoryId) return all;
+  return all.where((item) => item.categoryId == categoryId).toList();
+}
+
+FoodModel? _findMockFoodById(String foodId) {
+  for (final item in drinksAndSweetsMockFoods()) {
+    if (item.id == foodId) return item;
+  }
+  return null;
 }
 
 String _feelingToApi(FeelingType feeling) {
@@ -198,10 +244,7 @@ String _feelingToApi(FeelingType feeling) {
 
 List<FoodModel> _mapFoodList(dynamic value) {
   if (value is! List) return [];
-  return value
-      .whereType<Map<String, dynamic>>()
-      .map(_mapFood)
-      .toList();
+  return value.whereType<Map<String, dynamic>>().map(_mapFood).toList();
 }
 
 FoodModel _mapFood(Map<String, dynamic> json) {
@@ -281,7 +324,9 @@ FoodModel _mapFood(Map<String, dynamic> json) {
     categoryName: categoryName,
     images: images,
     price: _asDouble(json['price']),
-    originalPrice: json['originalPrice'] == null ? null : _asDouble(json['originalPrice']),
+    originalPrice: json['originalPrice'] == null
+        ? null
+        : _asDouble(json['originalPrice']),
     preparationTime: _asInt(json['preparationTime']),
     rating: _asDouble(json['rating']),
     reviewCount: _asInt(json['reviewCount']),
@@ -304,14 +349,21 @@ FoodModel _mapFood(Map<String, dynamic> json) {
       sugar: _asDouble(nutrition['sugar']),
       sodium: _asDouble(nutrition['sodium']),
     ),
-    bestFor: (json['bestFor'] as List<dynamic>? ?? []).map((e) => _asString(e)).where((e) => e.isNotEmpty).toList(),
+    bestFor: (json['bestFor'] as List<dynamic>? ?? [])
+        .map((e) => _asString(e))
+        .where((e) => e.isNotEmpty)
+        .toList(),
     bestTimes: bestTimes,
     portionOptions: portionOptions,
     customizations: customizations,
-    dietaryTags: (json['dietaryTags'] as List<dynamic>? ?? []).map((e) => _asString(e)).where((e) => e.isNotEmpty).toList(),
+    dietaryTags: (json['dietaryTags'] as List<dynamic>? ?? [])
+        .map((e) => _asString(e))
+        .where((e) => e.isNotEmpty)
+        .toList(),
     isAvailable: _asBool(json['isAvailable'], fallback: true),
     isFeatured: _asBool(json['isFeatured']),
-    createdAt: DateTime.tryParse(_asString(json['createdAt'])) ?? DateTime.now(),
+    createdAt:
+        DateTime.tryParse(_asString(json['createdAt'])) ?? DateTime.now(),
   );
 }
 

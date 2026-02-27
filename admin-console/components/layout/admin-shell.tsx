@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, BarChart3, LayoutDashboard, ListOrdered, Settings, Tags, Ticket, Users, UtensilsCrossed } from 'lucide-react';
+import { Activity, BarChart3, Globe, LayoutDashboard, ListOrdered, Settings, Tags, Ticket, Users, UtensilsCrossed } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { roleLabel, type AdminRole } from '@/lib/rbac';
@@ -16,6 +16,7 @@ const navItems = [
   { href: '/users', label: 'Users', icon: Users },
   { href: '/reports', label: 'Reports', icon: BarChart3 },
   { href: '/support', label: 'Support', icon: Ticket },
+  { href: '/website', label: 'Website', icon: Globe },
   { href: '/settings', label: 'Settings', icon: Settings },
   { href: '/monitoring', label: 'Monitoring', icon: Activity },
 ];

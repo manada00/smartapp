@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/localization/l10n_extensions.dart';
 import '../../../core/router/app_router.dart';
+import '../../../data/mock/mock_drinks_sweets.dart';
 import '../../../data/models/food_model.dart';
 import '../../providers/food_provider.dart';
 import '../../providers/cart_provider.dart';
@@ -302,42 +303,94 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
 
+            SliverToBoxAdapter(
+              child: allFoodsAsync.when(
+                data: (foods) {
+                  final healthyDrinks = foods
+                      .where((f) => f.categoryId == healthyDrinksCategoryId)
+                      .toList();
+                  final smartSweets = foods
+                      .where((f) => f.categoryId == smartSweetsCategoryId)
+                      .toList();
+                  if (healthyDrinks.isEmpty && smartSweets.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _SectionHeader(
+                          title: 'Drinks & Sweets',
+                          onSeeAll: () => context.push(
+                            '${Routes.categoryDetail}/$drinksAndSweetsCategoryId',
+                            extra: 'Drinks & Sweets',
+                          ),
+                        ),
+                        if (healthyDrinks.isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _SubcategoryRow(
+                            title: 'Healthy Drinks',
+                            foods: healthyDrinks,
+                          ),
+                        ],
+                        if (smartSweets.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          _SubcategoryRow(
+                            title: 'Smart Sweets',
+                            foods: smartSweets,
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
+            ),
+
             // Popular foods
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               sliver: (curatedPopularFoods != null)
                   ? SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final food = curatedPopularFoods[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: FoodCard(
-                        food: food,
-                        onTap: () =>
-                            context.push('${Routes.foodDetail}/${food.id}'),
-                      ),
-                    );
-                  }, childCount: curatedPopularFoods.length.clamp(0, 3)),
-                )
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final food = curatedPopularFoods[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 20),
+                          child: FoodCard(
+                            food: food,
+                            onTap: () =>
+                                context.push('${Routes.foodDetail}/${food.id}'),
+                          ),
+                        );
+                      }, childCount: curatedPopularFoods.length.clamp(0, 3)),
+                    )
                   : popularFoodsAsync.when(
-                data: (foods) => SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final food = foods[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 20),
-                      child: FoodCard(
-                        food: food,
-                        onTap: () =>
-                            context.push('${Routes.foodDetail}/${food.id}'),
+                      data: (foods) => SliverList(
+                        delegate: SliverChildBuilderDelegate((context, index) {
+                          final food = foods[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: FoodCard(
+                              food: food,
+                              onTap: () => context.push(
+                                '${Routes.foodDetail}/${food.id}',
+                              ),
+                            ),
+                          );
+                        }, childCount: foods.length.clamp(0, 3)),
                       ),
-                    );
-                  }, childCount: foods.length.clamp(0, 3)),
-                ),
-                loading: () => const SliverToBoxAdapter(child: LoadingWidget()),
-                error: (e, _) => SliverToBoxAdapter(
-                  child: Center(child: Text('${context.l10n.errorPrefix}: $e')),
-                ),
-              ),
+                      loading: () =>
+                          const SliverToBoxAdapter(child: LoadingWidget()),
+                      error: (e, _) => SliverToBoxAdapter(
+                        child: Center(
+                          child: Text('${context.l10n.errorPrefix}: $e'),
+                        ),
+                      ),
+                    ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
@@ -361,10 +414,7 @@ List<FoodModel>? _resolvePopularFoods({
   }
 
   final byId = {for (final food in allFoods) food.id: food};
-  return curatedIds
-      .map((id) => byId[id])
-      .whereType<FoodModel>()
-      .toList();
+  return curatedIds.map((id) => byId[id]).whereType<FoodModel>().toList();
 }
 
 FeelingType? _feelingFromApiType(String value) {
@@ -530,6 +580,11 @@ class _QuickActions extends StatelessWidget {
             icon: Icons.calendar_today_rounded,
             label: context.l10n.plans,
             onTap: () => context.go(Routes.subscriptions),
+          ),
+          _QuickActionChip(
+            icon: Icons.auto_awesome_rounded,
+            label: 'Help Me Choose',
+            onTap: () => context.go(Routes.guided),
           ),
         ],
       ),
@@ -1055,6 +1110,42 @@ class _CategoryCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SubcategoryRow extends StatelessWidget {
+  final String title;
+  final List<FoodModel> foods;
+
+  const _SubcategoryRow({required this.title, required this.foods});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: AppTextStyles.labelLarge.copyWith(color: AppColors.primary),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 218,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemBuilder: (context, index) {
+              final food = foods[index];
+              return CompactFoodCard(
+                food: food,
+                onTap: () => context.push('${Routes.foodDetail}/${food.id}'),
+              );
+            },
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemCount: foods.length.clamp(0, 5),
+          ),
+        ),
+      ],
     );
   }
 }

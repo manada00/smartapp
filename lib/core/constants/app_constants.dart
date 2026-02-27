@@ -69,17 +69,14 @@ class AppConstants {
 class ApiConstants {
   ApiConstants._();
 
-  static const String _apiHost = String.fromEnvironment(
-    'API_HOST',
-    defaultValue: 'localhost',
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://smartapp-kohl.vercel.app/api/v1',
   );
-  static const String _apiPort = String.fromEnvironment(
-    'API_PORT',
-    defaultValue: '4000',
+  static const String socketUrl = String.fromEnvironment(
+    'SOCKET_BASE_URL',
+    defaultValue: 'https://smartapp-kohl.vercel.app',
   );
-
-  static const String baseUrl = 'http://$_apiHost:$_apiPort/api/v1';
-  static const String socketUrl = 'http://$_apiHost:$_apiPort';
 
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);

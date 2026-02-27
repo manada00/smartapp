@@ -73,7 +73,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
         case AuthStateNeedsOnboarding():
           context.go(Routes.profileSetup);
         case AuthStateAuthenticated():
-          context.go(Routes.home);
+          context.go(Routes.entry);
         default:
           context.go(Routes.phoneLogin);
       }

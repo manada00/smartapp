@@ -103,3 +103,11 @@
 
    
    OPen the console: npm --prefix "/Users/mohab.nada/Cursor Ai/NoreApp/admin-console" run dev
+
+
+   Website
+
+      bash
+     npm --prefix "/Users/mohab.nada/Cursor Ai/NoreApp/web-storefront" install
+     npm --prefix "/Users/mohab.nada/Cursor Ai/NoreApp/web-storefront" run dev
+      npm --prefix "/Users/mohab.nada/Cursor Ai/NoreApp/web-storefront" audit fix --force

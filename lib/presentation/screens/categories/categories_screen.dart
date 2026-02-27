@@ -44,13 +44,16 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
     for (final category in categories) {
       final categoryName = category.name.toLowerCase();
-      final localizedCategoryName = category.name.localize(context).toLowerCase();
+      final localizedCategoryName = category.name
+          .localize(context)
+          .toLowerCase();
       final categoryDescription = category.description.toLowerCase();
       final localizedCategoryDescription = category.description
           .localize(context)
           .toLowerCase();
 
-      final isMatch = categoryName.contains(_searchQuery) ||
+      final isMatch =
+          categoryName.contains(_searchQuery) ||
           localizedCategoryName.contains(_searchQuery) ||
           categoryDescription.contains(_searchQuery) ||
           localizedCategoryDescription.contains(_searchQuery);
@@ -70,9 +73,12 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
       final foodName = food.name.toLowerCase();
       final localizedFoodName = food.name.localize(context).toLowerCase();
       final foodDescription = food.description.toLowerCase();
-      final localizedFoodDescription = food.description.localize(context).toLowerCase();
+      final localizedFoodDescription = food.description
+          .localize(context)
+          .toLowerCase();
 
-      final isMatch = foodName.contains(_searchQuery) ||
+      final isMatch =
+          foodName.contains(_searchQuery) ||
           localizedFoodName.contains(_searchQuery) ||
           foodDescription.contains(_searchQuery) ||
           localizedFoodDescription.contains(_searchQuery);
@@ -98,7 +104,15 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(title: Text(context.l10n.categories)),
+      appBar: AppBar(
+        title: Text(context.l10n.categories),
+        actions: [
+          TextButton(
+            onPressed: () => context.go(Routes.guided),
+            child: const Text('Help Me Choose'),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -139,24 +153,32 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                             return ListTile(
                               dense: true,
                               leading: Icon(
-                                suggestion.type == _SearchSuggestionType.category
+                                suggestion.type ==
+                                        _SearchSuggestionType.category
                                     ? Icons.category_outlined
                                     : Icons.restaurant_menu_rounded,
                                 color: AppColors.primary,
                               ),
                               title: Text(suggestion.title.localize(context)),
-                              subtitle: Text(suggestion.subtitle.localize(context)),
+                              subtitle: Text(
+                                suggestion.subtitle.localize(context),
+                              ),
                               onTap: () {
                                 _searchController.text = suggestion.title;
-                                _searchController.selection = TextSelection.fromPosition(
-                                  TextPosition(offset: _searchController.text.length),
-                                );
+                                _searchController.selection =
+                                    TextSelection.fromPosition(
+                                      TextPosition(
+                                        offset: _searchController.text.length,
+                                      ),
+                                    );
                                 setState(
-                                  () => _searchQuery = suggestion.title.toLowerCase(),
+                                  () => _searchQuery = suggestion.title
+                                      .toLowerCase(),
                                 );
                                 _searchFocusNode.unfocus();
 
-                                if (suggestion.type == _SearchSuggestionType.category) {
+                                if (suggestion.type ==
+                                    _SearchSuggestionType.category) {
                                   context.push(
                                     '${Routes.categoryDetail}/${suggestion.id}',
                                     extra: suggestion.title,
@@ -164,7 +186,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                                   return;
                                 }
 
-                                context.push('${Routes.foodDetail}/${suggestion.id}');
+                                context.push(
+                                  '${Routes.foodDetail}/${suggestion.id}',
+                                );
                               },
                             );
                           }).toList(),
@@ -185,7 +209,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                     .where((food) {
                       if (_searchQuery.isEmpty) return false;
                       final foodName = food.name.toLowerCase();
-                      final localizedFoodName = food.name.localize(context).toLowerCase();
+                      final localizedFoodName = food.name
+                          .localize(context)
+                          .toLowerCase();
                       final foodDescription = food.description.toLowerCase();
                       final localizedFoodDescription = food.description
                           .localize(context)
@@ -217,7 +243,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                             localizedName.contains(_searchQuery) ||
                             rawDescription.contains(_searchQuery) ||
                             localizedDescription.contains(_searchQuery) ||
-                            matchingCategoryIdsFromFoodNames.contains(category.id);
+                            matchingCategoryIdsFromFoodNames.contains(
+                              category.id,
+                            );
                       }).toList();
 
                 if (filteredCategories.isEmpty) {
