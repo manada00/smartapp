@@ -15,6 +15,7 @@ export default function MealsPage() {
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -24,6 +25,7 @@ export default function MealsPage() {
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setError('');
       try {
         const [foodsRes, categoriesRes] = await Promise.all([
           apiRequest<ApiListResponse<FoodItem>>(`/food?limit=100${category ? `&category=${category}` : ''}`),
@@ -31,6 +33,10 @@ export default function MealsPage() {
         ]);
         setFoods(foodsRes.data || []);
         setCategories(categoriesRes.data || []);
+      } catch (e) {
+        setFoods([]);
+        setCategories([]);
+        setError(e instanceof Error ? e.message : 'Failed to load meals.');
       } finally {
         setLoading(false);
       }
@@ -70,6 +76,8 @@ export default function MealsPage() {
         </select>
       </div>
       {loading ? <p className="muted">Loading meals...</p> : null}
+      {error ? <p style={{ color: '#b42318' }}>{error}</p> : null}
+      {!loading && !error && visibleFoods.length === 0 ? <p className="muted">No meals available right now.</p> : null}
       <div className="grid cols-4">
         {visibleFoods.map((food) => (
           <Link key={food._id} href={`/meals/${food._id}`} className="card">

@@ -14,13 +14,18 @@ export default function GuidedPage() {
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [selectedMood, setSelectedMood] = useState(guidedMoods[0].id);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setError('');
       try {
         const response = await apiRequest<ApiListResponse<FoodItem>>('/food?limit=100');
         setFoods(response.data || []);
+      } catch (e) {
+        setFoods([]);
+        setError(e instanceof Error ? e.message : 'Failed to load recommendations.');
       } finally {
         setLoading(false);
       }
@@ -53,6 +58,8 @@ export default function GuidedPage() {
       </div>
 
       {loading ? <p className="muted">{t('loadingRecommendations')}</p> : null}
+      {error ? <p style={{ color: '#b42318' }}>{error}</p> : null}
+      {!loading && !error && visibleFoods.length === 0 ? <p className="muted">No recommendations available right now.</p> : null}
       <div className="grid cols-4">
         {visibleFoods.map((food) => (
           <Link key={food._id} href={`/meals/${food._id}`} className="card">
