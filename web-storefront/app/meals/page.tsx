@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { apiRequest } from '@/lib/api';
 import { useLanguage } from '@/components/language-provider';
+import { localizedText } from '@/lib/localized-text';
 import type { Category, FoodItem } from '@/lib/types';
 
 type ApiListResponse<T> = { data: T[] };
 
 export default function MealsPage() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [category, setCategory] = useState('');
@@ -47,8 +48,12 @@ export default function MealsPage() {
   const visibleFoods = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return foods;
-    return foods.filter((f) => f.name.toLowerCase().includes(q) || f.description.toLowerCase().includes(q));
-  }, [foods, search]);
+    return foods.filter((f) => {
+      const name = localizedText(lang, f.name, f.nameAr).toLowerCase();
+      const description = localizedText(lang, f.description, f.descriptionAr).toLowerCase();
+      return name.includes(q) || description.includes(q);
+    });
+  }, [foods, lang, search]);
 
   return (
     <section className="section">
@@ -71,7 +76,7 @@ export default function MealsPage() {
         <select value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="">{t('allCategories')}</option>
           {categories.map((c) => (
-            <option key={c._id} value={c._id}>{c.name}</option>
+            <option key={c._id} value={c._id}>{localizedText(lang, c.name, c.nameAr)}</option>
           ))}
         </select>
       </div>
@@ -81,9 +86,9 @@ export default function MealsPage() {
       <div className="grid cols-4">
         {visibleFoods.map((food) => (
           <Link key={food._id} href={`/meals/${food._id}`} className="card">
-            {food.images?.[0] ? <img src={food.images[0]} alt={food.name} className="meal-image" /> : <div className="meal-image placeholder">No image</div>}
-            <h3>{food.name}</h3>
-            <p className="muted">{food.description}</p>
+            {food.images?.[0] ? <img src={food.images[0]} alt={localizedText(lang, food.name, food.nameAr)} className="meal-image" /> : <div className="meal-image placeholder">No image</div>}
+            <h3>{localizedText(lang, food.name, food.nameAr)}</h3>
+            <p className="muted">{localizedText(lang, food.description, food.descriptionAr)}</p>
             <p><strong>{food.price} EGP</strong></p>
           </Link>
         ))}

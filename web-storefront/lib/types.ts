@@ -12,17 +12,21 @@ export type FunctionalScores = {
 export type FoodItem = {
   _id: string;
   name: string;
+  nameAr?: string;
   description: string;
+  descriptionAr?: string;
   images?: string[];
   price: number;
-  category?: { _id: string; name: string };
+  category?: { _id: string; name: string; nameAr?: string };
   functionalScores: FunctionalScores;
 };
 
 export type Category = {
   _id: string;
   name: string;
+  nameAr?: string;
   description?: string;
+  descriptionAr?: string;
   itemCount?: number;
 };
 

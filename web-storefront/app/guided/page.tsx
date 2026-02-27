@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { apiRequest } from '@/lib/api';
 import { useLanguage } from '@/components/language-provider';
 import { filterFoodsByMood, guidedMoods } from '@/lib/guided-moods';
+import { localizedText } from '@/lib/localized-text';
 import type { FoodItem } from '@/lib/types';
 
 type ApiListResponse<T> = { data: T[] };
@@ -63,9 +64,9 @@ export default function GuidedPage() {
       <div className="grid cols-4">
         {visibleFoods.map((food) => (
           <Link key={food._id} href={`/meals/${food._id}`} className="card">
-            {food.images?.[0] ? <img src={food.images[0]} alt={food.name} className="meal-image" /> : <div className="meal-image placeholder">No image</div>}
-            <h3>{food.name}</h3>
-            <p className="muted">{food.description}</p>
+            {food.images?.[0] ? <img src={food.images[0]} alt={localizedText(lang, food.name, food.nameAr)} className="meal-image" /> : <div className="meal-image placeholder">No image</div>}
+            <h3>{localizedText(lang, food.name, food.nameAr)}</h3>
+            <p className="muted">{localizedText(lang, food.description, food.descriptionAr)}</p>
             <p><strong>{food.price} EGP</strong></p>
           </Link>
         ))}
