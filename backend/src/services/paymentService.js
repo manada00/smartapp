@@ -124,7 +124,7 @@ class PaymentService {
       merchantId: this.merchantId,
       amount: amountString,
       currency,
-      orderId,
+      order: orderId,
       customer,
       description: `SmartApp one-time order ${orderId}`,
       merchantRedirect: redirectUrls.success,
@@ -172,7 +172,7 @@ class PaymentService {
       merchantId: this.merchantId,
       amount: amountString,
       currency,
-      orderId,
+      order: orderId,
       customer,
       description: `SmartApp subscription ${orderId}`,
       merchantRedirect: this.successRedirectUrl,
@@ -222,7 +222,8 @@ class PaymentService {
     ).toLowerCase();
 
     const merchant_reference = String(
-      normalizedPayload.orderId
+      normalizedPayload.order
+      || normalizedPayload.orderId
       || normalizedPayload.order_id
       || normalizedPayload.merchantOrderId
       || normalizedPayload.merchant_reference
