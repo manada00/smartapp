@@ -7,6 +7,8 @@ const { verifyFirebaseIdToken } = require('../config/firebase_admin');
 
 const router = express.Router();
 const googleOAuthClient = new OAuth2Client();
+const devOtpBypassEnabled = String(process.env.OTP_BYPASS_ENABLED || '').toLowerCase() === 'true';
+const devOtpBypassCode = String(process.env.OTP_BYPASS_CODE || '123456');
 
 const getGoogleAudiences = () => {
   const fromEnv = (process.env.GOOGLE_CLIENT_IDS || '')
@@ -54,8 +56,8 @@ router.post('/send-otp', [
     const { phone } = req.body;
     
     // Generate OTP (fixed in development for easier testing)
-    const otp = process.env.NODE_ENV === 'development'
-      ? '123456'
+    const otp = (process.env.NODE_ENV === 'development' || devOtpBypassEnabled)
+      ? devOtpBypassCode
       : Math.floor(100000 + Math.random() * 900000).toString();
     
     // Store OTP with expiry (5 minutes)
@@ -70,7 +72,7 @@ router.post('/send-otp', [
     res.json({
       success: true,
       message: 'OTP sent successfully',
-      ...(process.env.NODE_ENV === 'development' ? { debugOtp: otp } : {}),
+      ...((process.env.NODE_ENV === 'development' || devOtpBypassEnabled) ? { debugOtp: otp } : {}),
     });
   } catch (error) {
     res.status(500).json({
@@ -96,7 +98,9 @@ router.post('/verify-otp', [
     // Verify OTP
     const storedOtp = otpStore.get(phone);
     
-    if (!storedOtp || storedOtp.otp !== otp || storedOtp.expiresAt < Date.now()) {
+    const bypassMatch = devOtpBypassEnabled && otp === devOtpBypassCode;
+
+    if (!bypassMatch && (!storedOtp || storedOtp.otp !== otp || storedOtp.expiresAt < Date.now())) {
       return res.status(400).json({
         success: false,
         message: 'Invalid or expired OTP',
@@ -104,7 +108,9 @@ router.post('/verify-otp', [
     }
 
     // Clear OTP
-    otpStore.delete(phone);
+    if (storedOtp) {
+      otpStore.delete(phone);
+    }
 
     // Find or create user
     let user = await User.findOne({ phone: `+20${phone}` });
