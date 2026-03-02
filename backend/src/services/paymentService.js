@@ -420,22 +420,41 @@ class PaymentService {
       return response;
     };
 
-    const endpoint = `${this.baseUrl.replace(/\/$/, '')}/payment/initialize`;
-    const fallbackEndpoint = `${normalizeKashierBaseUrl(KASHIER_DEFAULT_BASE_URL).replace(/\/$/, '')}/payment/initialize`;
+    const baseCandidate = this.baseUrl.replace(/\/$/, '');
+    const fallbackBaseCandidate = normalizeKashierBaseUrl(KASHIER_DEFAULT_BASE_URL).replace(/\/$/, '');
+    const initializePaths = [
+      '/payment/initialize',
+      '/payments/initialize',
+      '/api/v1/payment/initialize',
+      '/api/v1/payments/initialize',
+      '/api/payment/initialize',
+      '/api/payments/initialize',
+    ];
+
+    const endpointCandidates = Array.from(new Set(
+      [baseCandidate, fallbackBaseCandidate]
+        .flatMap((base) => initializePaths.map((path) => `${base}${path}`)),
+    ));
 
     let response;
-    try {
-      response = await requestPaymentLink(endpoint);
-    } catch (error) {
-      if (fallbackEndpoint !== endpoint) {
-        try {
-          response = await requestPaymentLink(fallbackEndpoint);
-        } catch (fallbackError) {
-          throw new Error(`Unable to reach Kashier at ${endpoint} (fallback ${fallbackEndpoint} failed): ${fallbackError.message}`);
+    const attempts = [];
+
+    for (const candidate of endpointCandidates) {
+      try {
+        const current = await requestPaymentLink(candidate);
+        attempts.push(`${candidate} => ${current.status}`);
+
+        if (current.status !== 404) {
+          response = current;
+          break;
         }
-      } else {
-        throw new Error(`Unable to reach Kashier at ${endpoint}: ${error.message}`);
+      } catch (error) {
+        attempts.push(`${candidate} => network_error:${error.message}`);
       }
+    }
+
+    if (!response) {
+      throw new Error(`Unable to reach valid Kashier initialize endpoint. Attempts: ${attempts.join(' | ')}`);
     }
 
     const rawBody = await response.text().catch(() => '');
