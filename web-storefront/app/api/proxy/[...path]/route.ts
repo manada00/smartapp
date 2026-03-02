@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DEFAULT_API_URL } from '@/lib/config';
+import { API_URL } from '@/lib/config';
 
 async function forward(request: NextRequest, path: string[]) {
-  const targetUrl = new URL(`${DEFAULT_API_URL}/${path.join('/')}`);
+  const targetUrl = new URL(`${API_URL}/${path.join('/')}`);
   request.nextUrl.searchParams.forEach((value, key) => {
     targetUrl.searchParams.append(key, value);
   });
