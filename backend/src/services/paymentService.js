@@ -12,11 +12,34 @@ const addDays = (date, days) => {
 
 class PaymentService {
   constructor({ provider = 'kashier' } = {}) {
+    const pickEnv = (...keys) => keys
+      .map((key) => process.env[key])
+      .find((value) => String(value || '').trim().length > 0) || '';
+
     this.provider = provider;
-    this.merchantId = process.env.KASHIER_MERCHANT_ID || '';
-    this.apiKey = process.env.KASHIER_API_KEY || '';
-    this.secret = process.env.KASHIER_SECRET || '';
-    this.baseUrl = process.env.KASHIER_BASE_URL || '';
+    this.merchantId = pickEnv(
+      'KASHIER_MERCHANT_ID',
+      'KASHIER_MERCHANT',
+      'KASHIER_MID',
+      'KASHIER_ACCOUNT_ID',
+    );
+    this.apiKey = pickEnv(
+      'KASHIER_API_KEY',
+      'KASHIER_DEFAULT_TEST_KEY',
+      'KASHIER_TEST_API_KEY',
+      'KASHIER_PUBLIC_KEY',
+      'DEFAULT_TEST_KEY',
+      'default-test-key',
+    );
+    this.secret = pickEnv(
+      'KASHIER_SECRET',
+      'KASHIER_SECRET_KEY',
+      'KASHIER_WEBHOOK_SECRET',
+      'SECRET_KEY',
+      'SECRET_KEYS',
+      'Secret Keys',
+    );
+    this.baseUrl = pickEnv('KASHIER_BASE_URL') || 'https://payments.kashier.io';
     this.webhookUrl = process.env.KASHIER_WEBHOOK_URL || '';
     this.storefrontBaseUrl = (
       process.env.WEB_STOREFRONT_URL
@@ -302,7 +325,11 @@ class PaymentService {
 
   async _createKashierPaymentLink(payload) {
     if (!this.baseUrl || !this.merchantId || !this.apiKey) {
-      throw new Error('Kashier configuration is missing');
+      const missing = [];
+      if (!this.merchantId) missing.push('KASHIER_MERCHANT_ID');
+      if (!this.apiKey) missing.push('KASHIER_API_KEY');
+      if (!this.baseUrl) missing.push('KASHIER_BASE_URL');
+      throw new Error(`Kashier configuration is missing: ${missing.join(', ')}`);
     }
 
     const endpoint = `${this.baseUrl.replace(/\/$/, '')}/payments/link`;
