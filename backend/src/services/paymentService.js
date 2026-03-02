@@ -3,10 +3,11 @@ const Order = require('../models/Order');
 const Subscription = require('../models/Subscription');
 
 const createReference = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-const KASHIER_DEFAULT_BASE_URL = 'https://payments.kashier.io';
+const KASHIER_DEFAULT_BASE_URL = 'https://test-api.kashier.io';
 const KASHIER_HOST_REWRITES = {
-  'test-checkout.kashier.io': 'payments.kashier.io',
-  'checkout.kashier.io': 'payments.kashier.io',
+  'test-checkout.kashier.io': 'test-api.kashier.io',
+  'checkout.kashier.io': 'test-api.kashier.io',
+  'payments.kashier.io': 'test-api.kashier.io',
 };
 
 const normalizeKashierBaseUrl = (value) => {
@@ -119,6 +120,9 @@ class PaymentService {
       hash: orderHash,
       description: `SmartApp one-time order ${merchantReference}`,
       redirectUrls,
+      successRedirectUrl: redirectUrls.success,
+      failureRedirectUrl: redirectUrls.failure,
+      redirectUrl: redirectUrls.success,
       webhookUrl: this.webhookUrl,
       metadata: {
         type: 'one_time',
@@ -160,6 +164,9 @@ class PaymentService {
         success: this.successRedirectUrl,
         failure: this.failureRedirectUrl,
       },
+      successRedirectUrl: this.successRedirectUrl,
+      failureRedirectUrl: this.failureRedirectUrl,
+      redirectUrl: this.successRedirectUrl,
       webhookUrl: this.webhookUrl,
       metadata: {
         type: 'subscription',
@@ -413,8 +420,8 @@ class PaymentService {
       return response;
     };
 
-    const endpoint = `${this.baseUrl.replace(/\/$/, '')}/payments/link`;
-    const fallbackEndpoint = `${normalizeKashierBaseUrl(KASHIER_DEFAULT_BASE_URL).replace(/\/$/, '')}/payments/link`;
+    const endpoint = `${this.baseUrl.replace(/\/$/, '')}/payment/initialize`;
+    const fallbackEndpoint = `${normalizeKashierBaseUrl(KASHIER_DEFAULT_BASE_URL).replace(/\/$/, '')}/payment/initialize`;
 
     let response;
     try {
@@ -449,8 +456,25 @@ class PaymentService {
       throw new Error(`Failed to create Kashier payment link (${response.status})${providerMessage ? `: ${providerMessage}` : ''}`);
     }
 
+    const paymentUrl = body.payment_url
+      || body.url
+      || body.redirect_url
+      || body.checkout_url
+      || body.paymentLink
+      || body.data?.payment_url
+      || body.data?.url
+      || body.data?.redirect_url
+      || body.data?.checkout_url
+      || body.data?.paymentLink
+      || body.nextAction?.url
+      || null;
+
+    if (!paymentUrl) {
+      throw new Error('Kashier initialize succeeded but did not return checkout URL');
+    }
+
     return {
-      payment_url: body.payment_url || body.url || body.data?.payment_url || body.data?.url || null,
+      payment_url: paymentUrl,
       raw: body,
     };
   }
