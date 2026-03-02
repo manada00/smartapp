@@ -17,6 +17,29 @@ const paymentService = new PaymentService();
 const paymentOrchestrationService = new PaymentOrchestrationService();
 const orderService = new OrderService();
 
+const normalizeRedirectUrl = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return null;
+    }
+    return parsed.toString();
+  } catch (_error) {
+    return null;
+  }
+};
+
+const enrichRedirectUrl = (value, order) => {
+  const normalized = normalizeRedirectUrl(value);
+  if (!normalized) return null;
+  const parsed = new URL(normalized);
+  parsed.searchParams.set('orderId', String(order._id));
+  parsed.searchParams.set('orderNumber', String(order.orderNumber || ''));
+  parsed.searchParams.set('reference', String(order.payment_reference || order.paymentReferenceCode || ''));
+  return parsed.toString();
+};
+
 const persistOrderPaymentState = async (order) => {
   try {
     await syncOrderPaymentToSupabase(order);
@@ -275,6 +298,8 @@ router.post('/create', protect, async (req, res) => {
       currency,
       payment_method,
       payment_provider,
+      delivery_address,
+      redirect_urls,
     } = req.body;
 
     const order = await orderService.createOneTimeOrder({
@@ -285,9 +310,18 @@ router.post('/create', protect, async (req, res) => {
       currency,
       payment_method,
       payment_provider,
+      deliveryAddress: delivery_address,
     });
 
-    const paymentSession = await paymentOrchestrationService.createOneTimePayment(order);
+    const successUrl = enrichRedirectUrl(redirect_urls?.success, order);
+    const failureUrl = enrichRedirectUrl(redirect_urls?.failure, order);
+
+    const paymentSession = await paymentOrchestrationService.createOneTimePayment(order, {
+      redirectUrls: {
+        ...(successUrl ? { success: successUrl } : {}),
+        ...(failureUrl ? { failure: failureUrl } : {}),
+      },
+    });
     if (paymentSession?.payment_reference) {
       order.payment_reference = paymentSession.payment_reference;
       order.paymentReferenceCode = paymentSession.payment_reference;
@@ -295,10 +329,50 @@ router.post('/create', protect, async (req, res) => {
       await order.save();
     }
 
+    if (!paymentSession?.payment_url) {
+      throw new Error('Kashier payment URL was not returned');
+    }
+
     return res.status(201).json({
       success: true,
       data: order,
       payment: paymentSession,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get('/:id/payment-status', protect, async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      user: req.user._id,
+    }).select('_id orderNumber payment_status paymentStatus payment_webhook_processed_at status payment_provider payment_reference paymentReferenceCode updatedAt');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        orderStatus: order.status,
+        paymentStatus: order.payment_status || order.paymentStatus || 'pending',
+        paymentProvider: order.payment_provider || 'unknown',
+        paymentReference: order.payment_reference || order.paymentReferenceCode || null,
+        webhookConfirmed: Boolean(order.payment_webhook_processed_at),
+        webhookProcessedAt: order.payment_webhook_processed_at || null,
+        updatedAt: order.updatedAt || null,
+      },
     });
   } catch (error) {
     return res.status(500).json({

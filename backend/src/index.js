@@ -1,4 +1,12 @@
-require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.config();
+const kashierEnvPath = path.resolve(__dirname, '../kashair.env');
+if (fs.existsSync(kashierEnvPath)) {
+  dotenv.config({ path: kashierEnvPath, override: false });
+}
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');

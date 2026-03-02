@@ -25,6 +25,7 @@ class OrderService {
     currency = 'EGP',
     payment_method = 'card',
     payment_provider = 'mock',
+    deliveryAddress,
   }) {
     const normalizedPaymentMethod = ALLOWED_PAYMENT_METHODS.includes(String(payment_method))
       ? String(payment_method)
@@ -49,11 +50,13 @@ class OrderService {
       user: userId,
       user_id: userId,
       items: normalizedItems,
+      deliveryAddress,
       subtotal: computedSubtotal,
       deliveryFee: computedDeliveryFee,
       delivery_fee: computedDeliveryFee,
       total,
       currency,
+      amountDue: total,
       paymentMethod: normalizedPaymentMethod,
       order_type: 'one_time',
       status: 'pending',

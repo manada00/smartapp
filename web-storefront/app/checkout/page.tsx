@@ -8,15 +8,9 @@ import type { CartItem } from '@/lib/types';
 type OrderResponse = {
   data: {
     _id: string;
-    paymentStatus?: string;
-    paymentMethod?: string;
-    status?: string;
   };
   payment?: {
-    status?: string;
-    message?: string;
-    referenceCode?: string;
-    fakeIban?: string;
+    payment_url?: string;
   };
 };
 
@@ -36,10 +30,6 @@ export default function CheckoutPage() {
   const [authLoading, setAuthLoading] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(storage.getAccessToken()));
   const [step, setStep] = useState<'details' | 'payment'>('details');
-  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card' | 'instapay'>('cod');
-  const [cardNumber, setCardNumber] = useState('4111111111111111');
-  const [cardExpiry, setCardExpiry] = useState('12/30');
-  const [cardCvv, setCardCvv] = useState('123');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const items = storage.getCart<CartItem>();
@@ -99,7 +89,8 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setError('');
     try {
-      const response = await apiRequest<OrderResponse>('/orders', {
+      const origin = window.location.origin.replace(/\/$/, '');
+      const response = await apiRequest<OrderResponse>('/orders/create', {
         method: 'POST',
         body: {
           items: items.map((item) => ({
@@ -107,33 +98,30 @@ export default function CheckoutPage() {
             quantity: item.quantity,
             unitPrice: item.price,
             totalPrice: item.price * item.quantity,
+            name: item.name,
+            price: item.price,
           })),
-          deliveryAddress: {
+          subtotal,
+          delivery_fee: 25,
+          currency: 'EGP',
+          payment_method: 'card',
+          payment_provider: 'kashier',
+          delivery_address: {
             streetName: address,
             landmark: `${name} | ${phone}`,
           },
-          paymentMethod: paymentMethod,
-          ...(paymentMethod === 'card' ? {
-            cardDetails: {
-              number: cardNumber,
-              expiry: cardExpiry,
-              cvv: cardCvv,
-            },
-          } : {}),
+          redirect_urls: {
+            success: `${origin}/payment-success`,
+            failure: `${origin}/payment-failed`,
+          },
         },
       });
 
-      storage.setCart<CartItem>([]);
-      const query = new URLSearchParams({
-        orderId: response?.data?._id || '',
-        paymentStatus: response?.payment?.status || response?.data?.paymentStatus || '',
-        orderStatus: response?.data?.status || '',
-        paymentMethod: response?.data?.paymentMethod || paymentMethod,
-        message: response?.payment?.message || 'Order placed successfully.',
-        referenceCode: response?.payment?.referenceCode || '',
-        fakeIban: response?.payment?.fakeIban || '',
-      });
-      window.location.href = `/checkout/confirmation?${query.toString()}`;
+      if (!response?.payment?.payment_url) {
+        throw new Error('Unable to start payment session. Please try again.');
+      }
+
+      window.location.href = response.payment.payment_url;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout failed');
     } finally {
@@ -177,24 +165,16 @@ export default function CheckoutPage() {
           </div>
         ) : (
           <div className="grid">
-            <h3 style={{ margin: 0 }}>Choose Payment Method</h3>
-            <label className="payment-option"><input type="radio" name="payment" checked={paymentMethod === 'cod'} onChange={() => setPaymentMethod('cod')} /> Cash on Delivery</label>
-            <label className="payment-option"><input type="radio" name="payment" checked={paymentMethod === 'card'} onChange={() => setPaymentMethod('card')} /> Card (Visa/Mastercard/Meeza)</label>
-            <label className="payment-option"><input type="radio" name="payment" checked={paymentMethod === 'instapay'} onChange={() => setPaymentMethod('instapay')} /> InstaPay</label>
-
-            {paymentMethod === 'card' ? (
-              <>
-                <input placeholder="Card number" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} />
-                <input placeholder="Expiry MM/YY" value={cardExpiry} onChange={(e) => setCardExpiry(e.target.value)} />
-                <input placeholder="CVV" value={cardCvv} onChange={(e) => setCardCvv(e.target.value)} />
-              </>
-            ) : null}
+            <h3 style={{ margin: 0 }}>Pay with Card (Kashier)</h3>
+            <p className="muted" style={{ margin: 0 }}>
+              You will be securely redirected to Kashier hosted checkout to complete payment.
+            </p>
 
             <strong>Total: {subtotal + 25} EGP</strong>
             <div className="toolbar">
               <button className="btn secondary" onClick={() => setStep('details')}>Back</button>
               <button className="btn" onClick={placeOrder} disabled={submitting || items.length === 0}>
-                {submitting ? 'Processing...' : 'Confirm Order'}
+                {submitting ? 'Redirecting...' : 'Pay'}
               </button>
             </div>
           </div>

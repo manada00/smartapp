@@ -18,11 +18,24 @@ class PaymentService {
     this.secret = process.env.KASHIER_SECRET || '';
     this.baseUrl = process.env.KASHIER_BASE_URL || '';
     this.webhookUrl = process.env.KASHIER_WEBHOOK_URL || '';
-    this.successRedirectUrl = process.env.KASHIER_SUCCESS_REDIRECT_URL || '';
-    this.failureRedirectUrl = process.env.KASHIER_FAILURE_REDIRECT_URL || '';
+    this.storefrontBaseUrl = (
+      process.env.WEB_STOREFRONT_URL
+      || process.env.FRONTEND_BASE_URL
+      || process.env.WEBSITE_BASE_URL
+      || ''
+    ).replace(/\/$/, '');
+    this.successRedirectUrl = process.env.KASHIER_SUCCESS_REDIRECT_URL
+      || (this.storefrontBaseUrl ? `${this.storefrontBaseUrl}/payment-success` : '');
+    this.failureRedirectUrl = process.env.KASHIER_FAILURE_REDIRECT_URL
+      || (this.storefrontBaseUrl ? `${this.storefrontBaseUrl}/payment-failed` : '');
   }
 
-  async createOneTimePayment(order) {
+  async createOneTimePayment(order, options = {}) {
+    const redirectUrls = {
+      success: options.redirectUrls?.success || this.successRedirectUrl,
+      failure: options.redirectUrls?.failure || this.failureRedirectUrl,
+    };
+
     const merchantReference = String(order._id);
 
     const payload = {
@@ -31,10 +44,7 @@ class PaymentService {
       currency: order.currency || 'EGP',
       merchantReference,
       description: `SmartApp one-time order ${merchantReference}`,
-      redirectUrls: {
-        success: this.successRedirectUrl,
-        failure: this.failureRedirectUrl,
-      },
+      redirectUrls,
       webhookUrl: this.webhookUrl,
       metadata: {
         type: 'one_time',
