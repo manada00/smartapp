@@ -344,14 +344,19 @@ class PaymentService {
     }
 
     const endpoint = `${this.baseUrl.replace(/\/$/, '')}/payments/link`;
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-      },
-      body: JSON.stringify(payload),
-    });
+    let response;
+    try {
+      response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      throw new Error(`Unable to reach Kashier at ${endpoint}: ${error.message}`);
+    }
 
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {

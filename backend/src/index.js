@@ -102,6 +102,9 @@ app.use('/api/v1/admin/auth', adminAuthRoutes);
 app.use('/api/v1/admin', adminRoutes);
 
 // Alias routes for future provider integrations
+app.use('/auth', authRoutes);
+app.use('/user', userRoutes);
+app.use('/food', foodRoutes);
 app.use('/orders', orderRoutes);
 app.use('/subscriptions', subscriptionRoutes);
 app.use('/webhooks', webhookRoutes);
