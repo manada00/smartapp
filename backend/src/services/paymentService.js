@@ -84,9 +84,6 @@ class PaymentService {
       this.merchantId = this.secret.split('$')[0].trim();
     }
     this.baseUrl = normalizeKashierBaseUrl(pickEnv('KASHIER_BASE_URL'));
-    this.mode = String(pickEnv('KASHIER_MODE') || 'test').trim().toLowerCase() === 'live'
-      ? 'live'
-      : 'test';
     this.webhookUrl = process.env.KASHIER_WEBHOOK_URL || '';
     this.storefrontBaseUrl = (
       process.env.WEB_STOREFRONT_URL
@@ -125,7 +122,6 @@ class PaymentService {
       maxFailureAttempts: 3,
       paymentType: 'credit',
       merchantId: this.merchantId,
-      mode: this.mode,
       amount: amountString,
       currency,
       orderId,
@@ -174,7 +170,6 @@ class PaymentService {
       maxFailureAttempts: 3,
       paymentType: 'credit',
       merchantId: this.merchantId,
-      mode: this.mode,
       amount: amountString,
       currency,
       orderId,
