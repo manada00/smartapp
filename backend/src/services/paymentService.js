@@ -114,10 +114,10 @@ class PaymentService {
       id: options.customer?.id || order.user_id || order.user,
       email: options.customer?.email || order.userEmail,
     });
-    const metaData = encodeURIComponent(JSON.stringify({
+    const metaData = {
       type: 'one_time',
       order_id: String(order._id),
-    }));
+    };
     const expireAt = new Date(Date.now() + (30 * 60 * 1000)).toISOString();
 
     const payload = {
@@ -162,11 +162,11 @@ class PaymentService {
       id: options.customer?.id || subscription.user_id,
       email: options.customer?.email,
     });
-    const metaData = encodeURIComponent(JSON.stringify({
+    const metaData = {
       type: 'subscription',
       subscription_id: String(subscription._id),
       billing_cycle: subscription.billing_cycle,
-    }));
+    };
     const expireAt = new Date(Date.now() + (30 * 60 * 1000)).toISOString();
 
     const payload = {
