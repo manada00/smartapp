@@ -3,6 +3,31 @@ const Order = require('../models/Order');
 const Subscription = require('../models/Subscription');
 
 const createReference = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+const KASHIER_DEFAULT_BASE_URL = 'https://payments.kashier.io';
+const KASHIER_HOST_REWRITES = {
+  'test-checkout.kashier.io': 'payments.kashier.io',
+  'checkout.kashier.io': 'payments.kashier.io',
+};
+
+const normalizeKashierBaseUrl = (value) => {
+  const candidate = String(value || '').trim();
+  const withProtocol = candidate
+    ? (/^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`)
+    : KASHIER_DEFAULT_BASE_URL;
+
+  try {
+    const parsed = new URL(withProtocol);
+    const rewrittenHost = KASHIER_HOST_REWRITES[parsed.hostname.toLowerCase()];
+    if (rewrittenHost) {
+      parsed.hostname = rewrittenHost;
+    }
+
+    parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch (_error) {
+    return KASHIER_DEFAULT_BASE_URL;
+  }
+};
 
 const addDays = (date, days) => {
   const next = new Date(date);
@@ -50,7 +75,7 @@ class PaymentService {
     if (!this.merchantId && this.secret.includes('$')) {
       this.merchantId = this.secret.split('$')[0].trim();
     }
-    this.baseUrl = pickEnv('KASHIER_BASE_URL') || 'https://payments.kashier.io';
+    this.baseUrl = normalizeKashierBaseUrl(pickEnv('KASHIER_BASE_URL'));
     this.webhookUrl = process.env.KASHIER_WEBHOOK_URL || '';
     this.storefrontBaseUrl = (
       process.env.WEB_STOREFRONT_URL
@@ -335,27 +360,53 @@ class PaymentService {
   }
 
   async _createKashierPaymentLink(payload) {
-    if (!this.baseUrl || !this.merchantId || !this.apiKey) {
+    if (!(process && process.versions && process.versions.node)) {
+      throw new Error('Kashier payment link creation must run in Node.js server runtime');
+    }
+
+    if (!this.baseUrl || !this.merchantId || !this.apiKey || !this.secret) {
       const missing = [];
       if (!this.merchantId) missing.push('KASHIER_MERCHANT_ID');
       if (!this.apiKey) missing.push('KASHIER_API_KEY');
+      if (!this.secret) missing.push('KASHIER_SECRET');
       if (!this.baseUrl) missing.push('KASHIER_BASE_URL');
       throw new Error(`Kashier configuration is missing: ${missing.join(', ')}`);
     }
 
-    const endpoint = `${this.baseUrl.replace(/\/$/, '')}/payments/link`;
-    let response;
-    try {
-      response = await fetch(endpoint, {
+    const requestPaymentLink = async (endpoint) => {
+      const authorizationHeader = /^bearer\s+/i.test(this.secret)
+        ? this.secret
+        : `Bearer ${this.secret}`;
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': this.apiKey,
+          Authorization: authorizationHeader,
         },
         body: JSON.stringify(payload),
       });
+
+      return response;
+    };
+
+    const endpoint = `${this.baseUrl.replace(/\/$/, '')}/payments/link`;
+    const fallbackEndpoint = `${normalizeKashierBaseUrl(KASHIER_DEFAULT_BASE_URL).replace(/\/$/, '')}/payments/link`;
+
+    let response;
+    try {
+      response = await requestPaymentLink(endpoint);
     } catch (error) {
-      throw new Error(`Unable to reach Kashier at ${endpoint}: ${error.message}`);
+      if (fallbackEndpoint !== endpoint) {
+        try {
+          response = await requestPaymentLink(fallbackEndpoint);
+        } catch (fallbackError) {
+          throw new Error(`Unable to reach Kashier at ${endpoint} (fallback ${fallbackEndpoint} failed): ${fallbackError.message}`);
+        }
+      } else {
+        throw new Error(`Unable to reach Kashier at ${endpoint}: ${error.message}`);
+      }
     }
 
     const body = await response.json().catch(() => ({}));
