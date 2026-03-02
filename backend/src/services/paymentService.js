@@ -105,6 +105,7 @@ class PaymentService {
 
     const merchantReference = String(order._id);
     const amount = Number(order.total || 0);
+    const amountString = normalizeAmountForHash(amount);
     const currency = order.currency || 'EGP';
     const orderHash = this._generateOrderHash({
       merchantReference,
@@ -114,7 +115,7 @@ class PaymentService {
 
     const payload = {
       merchantId: this.merchantId,
-      amount,
+      amount: amountString,
       currency,
       merchantReference,
       orderHash,
@@ -146,6 +147,7 @@ class PaymentService {
   async createSubscriptionPayment(subscription) {
     const merchantReference = String(subscription._id);
     const amount = Number(subscription.initial_amount || 0);
+    const amountString = normalizeAmountForHash(amount);
     const currency = subscription.currency || 'EGP';
     const orderHash = this._generateOrderHash({
       merchantReference,
@@ -155,7 +157,7 @@ class PaymentService {
 
     const payload = {
       merchantId: this.merchantId,
-      amount,
+      amount: amountString,
       currency,
       merchantReference,
       orderHash,
