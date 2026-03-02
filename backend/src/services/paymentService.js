@@ -4,6 +4,7 @@ const Subscription = require('../models/Subscription');
 
 const createReference = (prefix) => `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 const KASHIER_DEFAULT_BASE_URL = 'https://test-api.kashier.io';
+const KASHIER_SESSIONS_PATH = '/v3/payment/sessions';
 const KASHIER_HOST_REWRITES = {
   'test-checkout.kashier.io': 'test-api.kashier.io',
   'checkout.kashier.io': 'test-api.kashier.io',
@@ -130,7 +131,7 @@ class PaymentService {
       },
     };
 
-    const response = await this._createKashierPaymentLink(payload);
+    const response = await this._createKashierPaymentSession(payload);
 
     return {
       success: true,
@@ -175,7 +176,7 @@ class PaymentService {
       },
     };
 
-    const response = await this._createKashierPaymentLink(payload);
+    const response = await this._createKashierPaymentSession(payload);
 
     return {
       success: true,
@@ -390,9 +391,9 @@ class PaymentService {
     return { success: true, ignored: false, data: subscription };
   }
 
-  async _createKashierPaymentLink(payload) {
+  async _createKashierPaymentSession(payload) {
     if (!(process && process.versions && process.versions.node)) {
-      throw new Error('Kashier payment link creation must run in Node.js server runtime');
+      throw new Error('Kashier payment session creation must run in Node.js server runtime');
     }
 
     if (!this.baseUrl || !this.merchantId || !this.apiKey || !this.secret) {
@@ -404,14 +405,14 @@ class PaymentService {
       throw new Error(`Kashier configuration is missing: ${missing.join(', ')}`);
     }
 
-    const requestPaymentLink = async (endpoint) => {
+    const requestPaymentSession = async (endpoint) => {
       const authorizationHeader = String(this.secret || '').trim();
 
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': this.apiKey,
+          'api-key': this.apiKey,
           Authorization: authorizationHeader,
         },
         body: JSON.stringify(payload),
@@ -422,26 +423,17 @@ class PaymentService {
 
     const baseCandidate = this.baseUrl.replace(/\/$/, '');
     const fallbackBaseCandidate = normalizeKashierBaseUrl(KASHIER_DEFAULT_BASE_URL).replace(/\/$/, '');
-    const initializePaths = [
-      '/payment/initialize',
-      '/payments/initialize',
-      '/api/v1/payment/initialize',
-      '/api/v1/payments/initialize',
-      '/api/payment/initialize',
-      '/api/payments/initialize',
-    ];
-
-    const endpointCandidates = Array.from(new Set(
-      [baseCandidate, fallbackBaseCandidate]
-        .flatMap((base) => initializePaths.map((path) => `${base}${path}`)),
-    ));
+    const endpointCandidates = Array.from(new Set([
+      `${baseCandidate}${KASHIER_SESSIONS_PATH}`,
+      `${fallbackBaseCandidate}${KASHIER_SESSIONS_PATH}`,
+    ]));
 
     let response;
     const attempts = [];
 
     for (const candidate of endpointCandidates) {
       try {
-        const current = await requestPaymentLink(candidate);
+        const current = await requestPaymentSession(candidate);
         attempts.push(`${candidate} => ${current.status}`);
 
         if (current.status !== 404) {
@@ -454,7 +446,7 @@ class PaymentService {
     }
 
     if (!response) {
-      throw new Error(`Unable to reach valid Kashier initialize endpoint. Attempts: ${attempts.join(' | ')}`);
+      throw new Error(`Unable to reach Kashier session endpoint. Attempts: ${attempts.join(' | ')}`);
     }
 
     const rawBody = await response.text().catch(() => '');
@@ -472,10 +464,15 @@ class PaymentService {
         || body?.errors?.[0]?.message
         || rawBody.slice(0, 220)
         || '';
-      throw new Error(`Failed to create Kashier payment link (${response.status})${providerMessage ? `: ${providerMessage}` : ''}`);
+      throw new Error(`Failed to create Kashier payment session (${response.status})${providerMessage ? `: ${providerMessage}` : ''}`);
     }
 
-    const paymentUrl = body.payment_url
+    const paymentUrl = body.sessionUrl
+      || body.session_url
+      || body.data?.sessionUrl
+      || body.data?.session_url
+      || body.result?.sessionUrl
+      || body.result?.session_url
       || body.url
       || body.redirect_url
       || body.checkout_url
@@ -489,7 +486,7 @@ class PaymentService {
       || null;
 
     if (!paymentUrl) {
-      throw new Error('Kashier initialize succeeded but did not return checkout URL');
+      throw new Error('Kashier session created but no sessionUrl/checkout URL was returned');
     }
 
     return {
