@@ -38,12 +38,20 @@ export default function CheckoutPage() {
     () => items.reduce((sum, item) => sum + item.price * item.quantity, 0),
     [items],
   );
+  const normalizedPhone = useMemo(() => {
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('0')) {
+      return digits.slice(1);
+    }
+    return digits;
+  }, [phone]);
+  const isValidEgyptPhone = /^(10|11|12|15)\d{8}$/.test(normalizedPhone);
 
   async function sendOtp() {
     setAuthLoading(true);
     setError('');
     try {
-      await apiRequest('/auth/send-otp', { method: 'POST', body: { phone } });
+      await apiRequest('/auth/send-otp', { method: 'POST', body: { phone: normalizedPhone } });
       setOtpSent(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to send OTP');
@@ -58,7 +66,7 @@ export default function CheckoutPage() {
     try {
       const response = await apiRequest<VerifyResponse>('/auth/verify-otp', {
         method: 'POST',
-        body: { phone, otp },
+        body: { phone: normalizedPhone, otp },
       });
       storage.setTokens(response.data.accessToken, response.data.refreshToken);
       setIsAuthenticated(true);
@@ -73,8 +81,8 @@ export default function CheckoutPage() {
   }
 
   function continueToPayment() {
-    if (!name.trim() || !address.trim() || phone.trim().length !== 10) {
-      setError('Please complete name, address, and 10-digit phone first.');
+    if (!name.trim() || !address.trim() || !isValidEgyptPhone) {
+      setError('Please complete name, address, and a valid Egyptian phone (e.g. 1065777847 or 01065777847).');
       return;
     }
     if (!isAuthenticated) {
@@ -139,12 +147,16 @@ export default function CheckoutPage() {
           <div className="grid">
             <input placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
             <input placeholder="Delivery address" value={address} onChange={(e) => setAddress(e.target.value)} />
-            <input placeholder="Egypt phone number (10 digits)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <input
+              placeholder="Egypt phone number (10 or 11 digits)"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
+            />
 
             {!isAuthenticated ? (
               <>
                 {!otpSent ? (
-                  <button className="btn secondary" onClick={sendOtp} disabled={authLoading || phone.length !== 10}>
+                  <button className="btn secondary" onClick={sendOtp} disabled={authLoading || !isValidEgyptPhone}>
                     {authLoading ? 'Sending OTP...' : 'Send OTP'}
                   </button>
                 ) : (
