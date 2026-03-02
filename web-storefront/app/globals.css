@@ -439,6 +439,41 @@ input, select, textarea { width: 100%; max-width: 100%; font: inherit; }
   padding: 12px 16px;
 }
 .login-error { color: #b42318; margin: 0; }
+.akedly-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 20, 0.5);
+  display: grid;
+  place-items: center;
+  z-index: 60;
+  padding: 18px;
+}
+.akedly-modal-card {
+  width: min(840px, 100%);
+  background: #fff;
+  border-radius: 18px;
+  border: 1px solid #e8ddc5;
+  box-shadow: 0 20px 36px rgba(20,20,20,.22);
+  overflow: hidden;
+}
+.akedly-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0e7d4;
+}
+.akedly-modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.akedly-widget-iframe {
+  width: 100%;
+  min-height: 560px;
+  border: 0;
+  background: #fff;
+}
 .payment-result-section {
   min-height: calc(100vh - 110px);
   display: grid;
@@ -555,6 +590,11 @@ th, td { border-bottom: 1px solid var(--border); padding: 10px; text-align: left
   .payment-option { align-items: flex-start; }
   .login-page { border-radius: 14px; padding: 12px; min-height: auto; }
   .login-card { width: 100%; padding: 18px 14px; border-radius: 16px; }
+  .akedly-modal-overlay { padding: 10px; }
+  .akedly-modal-card { border-radius: 14px; }
+  .akedly-modal-header { padding: 10px 12px; }
+  .akedly-modal-header h2 { font-size: 1rem; }
+  .akedly-widget-iframe { min-height: 72vh; }
   .payment-result-section { min-height: auto; padding: 20px 0 8px; }
   .payment-result-card { padding: 18px 14px; border-radius: 16px; }
   .payment-result-message { font-size: 1rem; }

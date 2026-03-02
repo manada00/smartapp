@@ -93,11 +93,13 @@ app.set('io', io);
 
 // Routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/v1/user', userRoutes);
 app.use('/api/v1/food', foodRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/subscriptions', subscriptionRoutes);
 app.use('/api/v1/webhooks', webhookRoutes);
+app.use('/api/webhooks', webhookRoutes);
 app.use('/api/v1/admin/auth', adminAuthRoutes);
 app.use('/api/v1/admin', adminRoutes);
 

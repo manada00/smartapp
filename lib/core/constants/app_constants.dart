@@ -15,6 +15,7 @@ class AppConstants {
   static const int otpLength = 6;
   static const int minOrderAmount = 100;
   static const int maxCodAmount = 2000;
+  static const String akedlyMobileCallbackUrl = 'smartapp://auth/callback';
 
   static const List<String> validPhonePrefixes = ['10', '11', '12', '15'];
   static const int phoneLength = 10;
@@ -94,6 +95,8 @@ class ApiConstants {
   // Auth endpoints
   static const String sendOtp = '/auth/send-otp';
   static const String verifyOtp = '/auth/verify-otp';
+  static const String startOtpAttempt = '/auth/otp/start';
+  static const String otpSession = '/auth/otp/session';
   static const String socialLogin = '/auth/social';
   static const String refreshToken = '/auth/refresh';
   static const String logout = '/auth/logout';

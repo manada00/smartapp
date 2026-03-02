@@ -3,28 +3,33 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { apiRequest } from '@/lib/api';
-import { storage } from '@/lib/storage';
+import { AkedlyWidgetModal } from '@/components/auth/akedly-widget-modal';
 
-type VerifyResponse = {
-  data: {
-    accessToken: string;
-    refreshToken: string;
-  };
+type StartOtpResponse = {
+  iframeUrl: string;
+  attemptId: string;
 };
 
 export default function LoginPage() {
   const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [sent, setSent] = useState(false);
+  const [iframeUrl, setIframeUrl] = useState('');
+  const [attemptId, setAttemptId] = useState('');
+  const [widgetOpen, setWidgetOpen] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  async function sendOtp() {
+  async function startOtpLogin() {
     setLoading(true);
     setError('');
     try {
-      await apiRequest('/auth/send-otp', { method: 'POST', body: { phone } });
-      setSent(true);
+      const response = await apiRequest<StartOtpResponse>('/auth/otp/start', {
+        method: 'POST',
+        body: { phoneNumber: phone },
+      });
+
+      setIframeUrl(response.iframeUrl);
+      setAttemptId(response.attemptId);
+      setWidgetOpen(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to send OTP');
     } finally {
@@ -32,22 +37,7 @@ export default function LoginPage() {
     }
   }
 
-  async function verifyOtp() {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await apiRequest<VerifyResponse>('/auth/verify-otp', {
-        method: 'POST',
-        body: { phone, otp },
-      });
-      storage.setTokens(response.data.accessToken, response.data.refreshToken);
-      window.location.href = '/meals';
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to verify OTP');
-    } finally {
-      setLoading(false);
-    }
-  }
+  const canStart = phone.replace(/\D/g, '').length >= 10;
 
   return (
     <section className="login-page">
@@ -56,21 +46,34 @@ export default function LoginPage() {
         <h1>Welcome Back</h1>
         <p className="muted">Your smart choices start here</p>
         <div className="login-form">
-          <input placeholder="Egypt phone number (10 digits)" value={phone} onChange={(e) => setPhone(e.target.value)} />
-          {sent ? <input placeholder="OTP" value={otp} onChange={(e) => setOtp(e.target.value)} /> : null}
+          <input
+            placeholder="Egypt phone number (10 digits)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
           {error ? <p className="login-error">{error}</p> : null}
-          {!sent ? (
-            <button className="btn login-btn" onClick={sendOtp} disabled={loading || phone.length !== 10}>
-              {loading ? 'Sending...' : 'Send OTP'}
-            </button>
-          ) : (
-            <button className="btn login-btn" onClick={verifyOtp} disabled={loading || otp.length !== 6}>
-              {loading ? 'Verifying...' : 'Verify & Login'}
-            </button>
-          )}
+          <button className="btn login-btn" onClick={startOtpLogin} disabled={loading || !canStart}>
+            {loading ? 'Starting...' : 'Login with Phone'}
+          </button>
         </div>
         <p className="muted">New user? <Link href="/signup">Create account</Link></p>
       </div>
+      <AkedlyWidgetModal
+        open={widgetOpen}
+        iframeUrl={iframeUrl}
+        onClose={() => setWidgetOpen(false)}
+        onResult={(result) => {
+          const params = new URLSearchParams();
+          params.set('status', result.status);
+          if (result.attemptId || attemptId) {
+            params.set('attemptId', result.attemptId || attemptId);
+          }
+          if (result.transactionId) {
+            params.set('transactionId', result.transactionId);
+          }
+          window.location.href = `/auth/callback?${params.toString()}`;
+        }}
+      />
     </section>
   );
 }

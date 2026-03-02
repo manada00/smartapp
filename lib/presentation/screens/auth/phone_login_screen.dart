@@ -7,6 +7,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/localization/l10n_extensions.dart';
 import '../../../core/router/app_router.dart';
+import 'akedly_auth_webview_screen.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/locale_provider.dart';
 import '../../widgets/common/app_button.dart';
@@ -30,7 +31,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
     return AppConstants.validPhonePrefixes.any((p) => phone.startsWith(p));
   }
 
-  Future<void> _sendOtp() async {
+  Future<void> _startPhoneLogin() async {
     if (!_isValidPhone) {
       setState(() {
         _errorText = 'Please enter a valid Egyptian phone number';
@@ -44,13 +45,46 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
     });
 
     try {
-      await ref.read(authStateProvider.notifier).sendOtp(_phoneController.text);
+      final started = await ref.read(authStateProvider.notifier).startAkedlyOtp(_phoneController.text);
+
+      if (!mounted) return;
+
+      final callback = await Navigator.of(context).push<AkedlyAuthCallbackResult>(
+        MaterialPageRoute(
+          builder: (_) => AkedlyAuthWebViewScreen(iframeUrl: started.iframeUrl),
+        ),
+      );
+
+      if (!mounted) return;
+
+      final result = callback ?? AkedlyAuthCallbackResult.cancelled;
+      final completed = await ref.read(authStateProvider.notifier).completeAkedlySession(
+            status: result.status,
+            attemptId: result.attemptId ?? started.attemptId,
+            transactionId: result.transactionId,
+          );
+
       if (mounted) {
-        context.push(Routes.otpVerification, extra: _phoneController.text);
+        if (!completed) {
+          final authState = ref.read(authStateProvider);
+          setState(() {
+            _errorText = authState is AuthStateError
+                ? authState.message
+                : 'Unable to complete login. Please try again.';
+          });
+          return;
+        }
+
+        final authState = ref.read(authStateProvider);
+        if (authState is AuthStateNeedsOnboarding) {
+          context.go(Routes.profileSetup);
+        } else if (authState is AuthStateAuthenticated) {
+          context.go(Routes.home);
+        }
       }
     } catch (e) {
       setState(() {
-        _errorText = e.toString();
+        _errorText = e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (mounted) {
@@ -228,7 +262,7 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
               const SizedBox(height: 24),
               AppButton(
                 text: 'Continue',
-                onPressed: _isValidPhone ? _sendOtp : null,
+                onPressed: _isValidPhone ? _startPhoneLogin : null,
                 isLoading: _isLoading,
                 width: double.infinity,
                 gradient: _isValidPhone ? AppColors.primaryGradient : null,

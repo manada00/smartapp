@@ -22,6 +22,16 @@ final authStateProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   );
 });
 
+class AkedlyOtpStartResponse {
+  final String iframeUrl;
+  final String attemptId;
+
+  const AkedlyOtpStartResponse({
+    required this.iframeUrl,
+    required this.attemptId,
+  });
+}
+
 class AuthNotifier extends StateNotifier<AuthState> {
   final SecureStorage _secureStorage;
   final LocalStorage _localStorage;
@@ -57,6 +67,146 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = AuthState.error(e.toString());
       rethrow;
     }
+  }
+
+  Future<AkedlyOtpStartResponse> startAkedlyOtp(String phoneNumber) async {
+    state = const AuthState.loading();
+    try {
+      final response = await _dioClient.post(
+        ApiConstants.startOtpAttempt,
+        data: {'phoneNumber': phoneNumber},
+      );
+
+      final body = response.data as Map<String, dynamic>? ?? {};
+      final iframeUrl = (body['iframeUrl'] ?? '').toString().trim();
+      final attemptId = (body['attemptId'] ?? '').toString().trim();
+
+      if (body['success'] != true || iframeUrl.isEmpty || attemptId.isEmpty) {
+        throw Exception(_extractApiErrorMessage(body, fallback: 'Unable to start OTP verification'));
+      }
+
+      state = const AuthState.unauthenticated(showOnboarding: false);
+
+      return AkedlyOtpStartResponse(
+        iframeUrl: iframeUrl,
+        attemptId: attemptId,
+      );
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      final statusCode = e.response?.statusCode;
+
+      final message = switch (statusCode) {
+        429 => 'Too many OTP attempts. Please try again shortly.',
+        _ => _extractApiErrorMessage(data, fallback: 'Unable to start OTP verification'),
+      };
+
+      state = AuthState.error(message);
+      rethrow;
+    } catch (e) {
+      final message = e is Exception ? e.toString().replaceFirst('Exception: ', '') : e.toString();
+      state = AuthState.error(message);
+      rethrow;
+    }
+  }
+
+  Future<bool> completeAkedlySession({
+    required String status,
+    String? attemptId,
+    String? transactionId,
+  }) async {
+    state = const AuthState.loading();
+
+    final normalizedStatus = status.toLowerCase();
+    if (normalizedStatus != 'success') {
+      state = AuthState.error('OTP verification failed. Please try again.');
+      return false;
+    }
+
+    if ((attemptId == null || attemptId.isEmpty) && (transactionId == null || transactionId.isEmpty)) {
+      state = AuthState.error('Missing OTP verification reference.');
+      return false;
+    }
+
+    final timeoutAt = DateTime.now().add(const Duration(seconds: 30));
+
+    while (DateTime.now().isBefore(timeoutAt)) {
+      try {
+        final response = await _dioClient.get(
+          ApiConstants.otpSession,
+          queryParameters: {
+            if (attemptId != null && attemptId.isNotEmpty) 'attemptId': attemptId,
+            if (transactionId != null && transactionId.isNotEmpty) 'transactionId': transactionId,
+          },
+        );
+
+        final body = response.data as Map<String, dynamic>? ?? {};
+        if (body['pending'] == true) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+          continue;
+        }
+
+        if (body['failed'] == true) {
+          state = AuthState.error(_extractApiErrorMessage(body, fallback: 'OTP verification failed'));
+          return false;
+        }
+
+        if (body['success'] != true) {
+          final message = _extractApiErrorMessage(body, fallback: 'OTP verification did not complete');
+          state = AuthState.error(message);
+          return false;
+        }
+
+        final data = body['data'] as Map<String, dynamic>?;
+        if (data == null) {
+          state = const AuthState.error('Missing login session data.');
+          return false;
+        }
+
+        final accessToken = (data['accessToken'] ?? '').toString();
+        final refreshToken = (data['refreshToken'] ?? '').toString();
+        final user = data['user'] as Map<String, dynamic>? ?? {};
+
+        if (accessToken.isEmpty || refreshToken.isEmpty || user['id'] == null) {
+          state = const AuthState.error('Invalid login session payload.');
+          return false;
+        }
+
+        await _secureStorage.setAccessToken(accessToken);
+        await _secureStorage.setRefreshToken(refreshToken);
+        await _secureStorage.setUserId(user['id'].toString());
+        await _localStorage.setFirstLaunchComplete();
+
+        final isNewUser = data['isNewUser'] == true;
+        if (isNewUser) {
+          state = const AuthState.needsOnboarding();
+        } else {
+          await _localStorage.setOnboardingComplete();
+          state = const AuthState.authenticated();
+        }
+
+        return true;
+      } on DioException catch (e) {
+        final statusCode = e.response?.statusCode;
+        if (statusCode == 202) {
+          await Future<void>.delayed(const Duration(seconds: 2));
+          continue;
+        }
+
+        final message = switch (statusCode) {
+          429 => 'Too many verification requests. Please try again shortly.',
+          _ => _extractApiErrorMessage(e.response?.data, fallback: 'Unable to complete OTP verification'),
+        };
+
+        state = AuthState.error(message);
+        return false;
+      } catch (e) {
+        state = AuthState.error(e.toString());
+        return false;
+      }
+    }
+
+    state = const AuthState.error('Verification timed out. Please try again.');
+    return false;
   }
 
   Future<bool> verifyOtp(String phone, String otp) async {
@@ -172,6 +322,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     await _secureStorage.clearAll();
     state = const AuthState.unauthenticated(showOnboarding: false);
+  }
+
+  String _extractApiErrorMessage(dynamic responseData, {required String fallback}) {
+    if (responseData is Map<String, dynamic>) {
+      final code = (responseData['code'] ?? '').toString().toUpperCase();
+      if (code == 'INVALID_SIGNATURE') {
+        return 'Verification signature invalid. Please retry in a moment.';
+      }
+      if (code.contains('RATE_LIMIT')) {
+        return 'Too many attempts. Please try again shortly.';
+      }
+
+      final message = responseData['message'];
+      if (message is String && message.trim().isNotEmpty) {
+        return message;
+      }
+    }
+
+    return fallback;
   }
 }
 

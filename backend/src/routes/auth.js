@@ -2,13 +2,24 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
+const AkedlyAuthSession = require('../models/AkedlyAuthSession');
 const { generateTokens, protect } = require('../middleware/auth');
 const { verifyFirebaseIdToken } = require('../config/firebase_admin');
+const { normalizeEgyptPhoneToE164 } = require('../utils/phone');
+const {
+  buildAkedlySignaturePayload,
+  generateAkedlySignature,
+} = require('../utils/akedlySignature');
 
 const router = express.Router();
 const googleOAuthClient = new OAuth2Client();
 const devOtpBypassEnabled = String(process.env.OTP_BYPASS_ENABLED || '').toLowerCase() === 'true';
 const devOtpBypassCode = String(process.env.OTP_BYPASS_CODE || '123456');
+const AKEDLY_CREATE_ATTEMPT_URL = 'https://api.akedly.io/api/v1/widget-sdk/create-attempt';
+const AKEDLY_TIMESTAMP_WINDOW_MS = 5 * 60 * 1000;
+const AKEDLY_SESSION_TTL_MS = 15 * 60 * 1000;
+
+const createReferralCode = () => `SF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
 const getGoogleAudiences = () => {
   const fromEnv = (process.env.GOOGLE_CLIENT_IDS || '')
@@ -42,6 +53,272 @@ const verifyGoogleIdToken = async (idToken) => {
 
 // Store OTPs temporarily (use Redis in production)
 const otpStore = new Map();
+
+router.post('/otp/start', [
+  body('phoneNumber').isString().notEmpty().withMessage('phoneNumber is required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const apiKey = String(process.env.AKEDLY_API_KEY || '').trim();
+    const publicKey = String(process.env.AKEDLY_PUBLIC_KEY || '').trim();
+    const secret = String(process.env.AKEDLY_SECRET || '').trim();
+
+    if (!apiKey || !publicKey || !secret) {
+      const missing = [];
+      if (!apiKey) missing.push('AKEDLY_API_KEY');
+      if (!publicKey) missing.push('AKEDLY_PUBLIC_KEY');
+      if (!secret) missing.push('AKEDLY_SECRET');
+
+      return res.status(500).json({
+        success: false,
+        message: `Akedly configuration is missing: ${missing.join(', ')}`,
+      });
+    }
+
+    let phoneNumber;
+    try {
+      phoneNumber = normalizeEgyptPhoneToE164(req.body.phoneNumber);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: error.message || 'Invalid phoneNumber format',
+      });
+    }
+
+    const timestamp = Date.now();
+    if (Math.abs(Date.now() - timestamp) > AKEDLY_TIMESTAMP_WINDOW_MS) {
+      return res.status(400).json({
+        success: false,
+        message: 'Request timestamp is outside the allowed 5-minute window',
+      });
+    }
+
+    const signingPayload = buildAkedlySignaturePayload({
+      apiKey,
+      publicKey,
+      timestamp,
+      phoneNumber,
+    });
+    const signature = generateAkedlySignature(signingPayload, secret);
+
+    const requestBody = {
+      ...signingPayload,
+      signature,
+    };
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    let providerResponse;
+    try {
+      providerResponse = await fetch(AKEDLY_CREATE_ATTEMPT_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    const rawBody = await providerResponse.text().catch(() => '');
+    const providerBody = (() => {
+      try {
+        return rawBody ? JSON.parse(rawBody) : {};
+      } catch (_error) {
+        return {};
+      }
+    })();
+
+    if (!providerResponse.ok || providerBody.success === false) {
+      const providerCode = String(
+        providerBody.code
+        || providerBody.errorCode
+        || providerBody.error?.code
+        || '',
+      ).toUpperCase();
+      const providerMessage = providerBody.message
+        || providerBody.error?.message
+        || rawBody.slice(0, 220)
+        || 'Unable to start OTP verification';
+
+      if (providerResponse.status === 429 || providerCode.includes('RATE_LIMIT')) {
+        return res.status(429).json({
+          success: false,
+          code: 'RATE_LIMIT_EXCEEDED',
+          message: 'Akedly rate limit reached. Please try again shortly.',
+        });
+      }
+
+      if (providerCode === 'INVALID_SIGNATURE' || providerResponse.status === 401 || providerResponse.status === 403) {
+        return res.status(400).json({
+          success: false,
+          code: 'INVALID_SIGNATURE',
+          message: 'Akedly signature validation failed.',
+        });
+      }
+
+      return res.status(502).json({
+        success: false,
+        code: providerCode || 'AKEDLY_START_FAILED',
+        message: providerMessage,
+      });
+    }
+
+    const iframeUrl = String(
+      providerBody.iframeUrl
+      || providerBody.iframe_url
+      || providerBody.widgetUrl
+      || providerBody.data?.iframeUrl
+      || providerBody.data?.iframe_url
+      || providerBody.data?.widgetUrl
+      || '',
+    ).trim();
+
+    const attemptId = String(
+      providerBody.attemptId
+      || providerBody.attempt_id
+      || providerBody.data?.attemptId
+      || providerBody.data?.attempt_id
+      || providerBody.id
+      || '',
+    ).trim();
+
+    if (!iframeUrl || !attemptId) {
+      return res.status(502).json({
+        success: false,
+        code: 'AKEDLY_INVALID_RESPONSE',
+        message: 'Akedly did not return iframeUrl and attemptId',
+      });
+    }
+
+    await AkedlyAuthSession.findOneAndUpdate(
+      { attemptId },
+      {
+        $set: {
+          attemptId,
+          phone: phoneNumber,
+          status: 'pending',
+          payload: providerBody,
+          expiresAt: new Date(Date.now() + AKEDLY_SESSION_TTL_MS),
+        },
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    );
+
+    return res.json({
+      success: true,
+      iframeUrl,
+      attemptId,
+    });
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      return res.status(504).json({
+        success: false,
+        message: 'Timed out while contacting Akedly',
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to start OTP verification',
+    });
+  }
+});
+
+router.get('/otp/session', async (req, res) => {
+  try {
+    const attemptId = String(req.query.attemptId || '').trim();
+    const transactionId = String(req.query.transactionId || '').trim();
+
+    if (!attemptId && !transactionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'attemptId or transactionId is required',
+      });
+    }
+
+    const filters = [];
+    if (attemptId) filters.push({ attemptId });
+    if (transactionId) filters.push({ transactionId });
+
+    const session = await AkedlyAuthSession.findOne({ $or: filters })
+      .populate('user', 'phone name isOnboardingComplete')
+      .sort({ updatedAt: -1 });
+
+    if (!session) {
+      return res.status(202).json({
+        success: true,
+        pending: true,
+        message: 'Awaiting verification webhook',
+      });
+    }
+
+    if (session.expiresAt && session.expiresAt.getTime() < Date.now()) {
+      return res.status(410).json({
+        success: false,
+        message: 'OTP session expired',
+      });
+    }
+
+    if (session.status === 'failed') {
+      return res.json({
+        success: true,
+        pending: false,
+        failed: true,
+        message: 'OTP verification failed',
+      });
+    }
+
+    if (session.status !== 'success' || !session.accessToken || !session.refreshToken) {
+      return res.status(202).json({
+        success: true,
+        pending: true,
+        message: 'Awaiting verification webhook',
+      });
+    }
+
+    let user = session.user;
+    if (!user && session.phone) {
+      user = await User.findOne({ phone: session.phone }).select('phone name isOnboardingComplete');
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Verified user account not found',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          phone: user.phone,
+          name: user.name,
+          isOnboardingComplete: user.isOnboardingComplete,
+        },
+        isNewUser: session.isNewUser === true,
+        accessToken: session.accessToken,
+        refreshToken: session.refreshToken,
+        attemptId: session.attemptId,
+        transactionId: session.transactionId,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Unable to fetch OTP session',
+    });
+  }
+});
 
 // Send OTP
 router.post('/send-otp', [
@@ -120,7 +397,7 @@ router.post('/verify-otp', [
       user = await User.create({
         phone: `+20${phone}`,
         socialProvider: 'phone',
-        referralCode: `SF${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        referralCode: createReferralCode(),
       });
     }
 
@@ -220,7 +497,7 @@ router.post('/social', [
         name: decodedToken.name,
         profileImage: decodedToken.picture,
         phone: decodedToken.phone_number,
-        referralCode: `SF${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        referralCode: createReferralCode(),
       });
     } else {
       user.firebaseUid = user.firebaseUid || decodedToken.uid;
