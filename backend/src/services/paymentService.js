@@ -22,6 +22,9 @@ class PaymentService {
       'KASHIER_MERCHANT',
       'KASHIER_MID',
       'KASHIER_ACCOUNT_ID',
+      'MERCHANT_ID',
+      'Merchant_ID',
+      'KASHIER_MERCHANTID',
     );
     this.apiKey = pickEnv(
       'KASHIER_API_KEY',
@@ -29,7 +32,12 @@ class PaymentService {
       'KASHIER_TEST_API_KEY',
       'KASHIER_PUBLIC_KEY',
       'DEFAULT_TEST_KEY',
+      'DEFAULT-TEST-KEY',
       'default-test-key',
+      'PAYMENT_API_KEY',
+      'PAYMENT_API_KEYS',
+      'Payment_API_Key',
+      'Payment API Keys',
     );
     this.secret = pickEnv(
       'KASHIER_SECRET',
