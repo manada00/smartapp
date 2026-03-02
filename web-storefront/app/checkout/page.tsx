@@ -48,6 +48,11 @@ export default function CheckoutPage() {
   const isValidEgyptPhone = /^(10|11|12|15)\d{8}$/.test(normalizedPhone);
 
   async function sendOtp() {
+    if (!isValidEgyptPhone) {
+      setError('Enter a valid Egyptian phone number first.');
+      return;
+    }
+
     setAuthLoading(true);
     setError('');
     try {
@@ -155,18 +160,25 @@ export default function CheckoutPage() {
 
             {!isAuthenticated ? (
               <>
-                {!otpSent ? (
+                <div className="toolbar" style={{ marginBottom: 0 }}>
                   <button className="btn secondary" onClick={sendOtp} disabled={authLoading || !isValidEgyptPhone}>
-                    {authLoading ? 'Sending OTP...' : 'Send OTP'}
+                    {authLoading ? 'Sending OTP...' : otpSent ? 'Resend OTP' : 'Send OTP'}
                   </button>
-                ) : (
+                  {!otpSent ? (
+                    <button className="btn secondary" onClick={() => setOtpSent(true)} disabled={!isValidEgyptPhone || authLoading}>
+                      I already have OTP
+                    </button>
+                  ) : null}
+                </div>
+
+                {otpSent ? (
                   <>
-                    <input placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value)} />
+                    <input placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} />
                     <button className="btn secondary" onClick={verifyOtp} disabled={authLoading || otp.length !== 6}>
                       {authLoading ? 'Verifying...' : 'Verify OTP'}
                     </button>
                   </>
-                )}
+                ) : null}
               </>
             ) : <p className="muted">Logged in and verified.</p>}
 
