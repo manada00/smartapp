@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { apiRequest } from '@/lib/api';
 
 type PaymentStatusResponse = {
@@ -13,11 +12,16 @@ type PaymentStatusResponse = {
 };
 
 export default function PaymentFailedPage() {
-  const searchParams = useSearchParams();
-  const orderId = searchParams.get('orderId');
+  const [orderId, setOrderId] = useState('');
   const [loading, setLoading] = useState(true);
   const [isPaid, setIsPaid] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const id = new URLSearchParams(window.location.search).get('orderId') || '';
+    setOrderId(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
