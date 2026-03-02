@@ -24,7 +24,14 @@ router.post('/create', protect, async (req, res) => {
       payment_token,
     });
 
-    const paymentSession = await paymentService.createSubscriptionPayment(subscription);
+    const paymentSession = await paymentService.createSubscriptionPayment(subscription, {
+      customer: {
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        phone: req.user.phone,
+      },
+    });
     if (paymentSession?.payment_reference) {
       subscription.payment_reference = paymentSession.payment_reference;
       await subscription.save();

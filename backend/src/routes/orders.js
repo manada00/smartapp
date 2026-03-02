@@ -321,6 +321,12 @@ router.post('/create', protect, async (req, res) => {
         ...(successUrl ? { success: successUrl } : {}),
         ...(failureUrl ? { failure: failureUrl } : {}),
       },
+      customer: {
+        id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        phone: req.user.phone,
+      },
     });
     if (paymentSession?.payment_reference) {
       order.payment_reference = paymentSession.payment_reference;

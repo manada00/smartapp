@@ -112,12 +112,19 @@ class PaymentService {
       amount,
       currency,
     });
+    const customer = this._buildCustomerPayload({
+      id: options.customer?.id || order.user_id || order.user,
+      name: options.customer?.name,
+      email: options.customer?.email || order.userEmail,
+      phone: options.customer?.phone,
+    });
 
     const payload = {
       merchantId: this.merchantId,
       amount: amountString,
       currency,
       merchantReference,
+      customer,
       orderHash,
       hash: orderHash,
       description: `SmartApp one-time order ${merchantReference}`,
@@ -146,7 +153,7 @@ class PaymentService {
     };
   }
 
-  async createSubscriptionPayment(subscription) {
+  async createSubscriptionPayment(subscription, options = {}) {
     const merchantReference = String(subscription._id);
     const amount = Number(subscription.initial_amount || 0);
     const amountString = normalizeAmountForHash(amount);
@@ -156,12 +163,19 @@ class PaymentService {
       amount,
       currency,
     });
+    const customer = this._buildCustomerPayload({
+      id: options.customer?.id || subscription.user_id,
+      name: options.customer?.name,
+      email: options.customer?.email,
+      phone: options.customer?.phone,
+    });
 
     const payload = {
       merchantId: this.merchantId,
       amount: amountString,
       currency,
       merchantReference,
+      customer,
       orderHash,
       hash: orderHash,
       description: `SmartApp subscription ${merchantReference}`,
@@ -511,6 +525,20 @@ class PaymentService {
       .createHash('sha256')
       .update(payload)
       .digest('hex');
+  }
+
+  _buildCustomerPayload(input = {}) {
+    const name = String(input.name || '').trim() || 'SmartApp Customer';
+    const email = String(input.email || '').trim() || 'customer@smartapp.app';
+    const phone = String(input.phone || '').replace(/\s+/g, '').trim() || '01000000000';
+    const reference = String(input.id || '').trim();
+
+    return {
+      ...(reference ? { reference } : {}),
+      name,
+      email,
+      phone,
+    };
   }
 
   async _findOrder({ order_id, payment_reference }) {
