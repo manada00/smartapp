@@ -84,6 +84,9 @@ class PaymentService {
       this.merchantId = this.secret.split('$')[0].trim();
     }
     this.baseUrl = normalizeKashierBaseUrl(pickEnv('KASHIER_BASE_URL'));
+    this.mode = String(pickEnv('KASHIER_MODE') || 'test').trim().toLowerCase() === 'live'
+      ? 'live'
+      : 'test';
     this.webhookUrl = process.env.KASHIER_WEBHOOK_URL || '';
     this.storefrontBaseUrl = (
       process.env.WEB_STOREFRONT_URL
@@ -103,42 +106,39 @@ class PaymentService {
       failure: options.redirectUrls?.failure || this.failureRedirectUrl,
     };
 
-    const merchantReference = String(order._id);
+    const orderId = String(order._id);
     const amount = Number(order.total || 0);
     const amountString = normalizeAmountForHash(amount);
     const currency = order.currency || 'EGP';
-    const orderHash = this._generateOrderHash({
-      merchantReference,
-      amount,
-      currency,
-    });
     const customer = this._buildCustomerPayload({
       id: options.customer?.id || order.user_id || order.user,
-      name: options.customer?.name,
       email: options.customer?.email || order.userEmail,
-      phone: options.customer?.phone,
     });
+    const metaData = encodeURIComponent(JSON.stringify({
+      type: 'one_time',
+      order_id: String(order._id),
+    }));
+    const expireAt = new Date(Date.now() + (30 * 60 * 1000)).toISOString();
 
     const payload = {
+      expireAt,
+      maxFailureAttempts: 3,
+      paymentType: 'credit',
       merchantId: this.merchantId,
+      mode: this.mode,
       amount: amountString,
       currency,
-      merchantReference,
+      orderId,
       customer,
-      orderHash,
-      hash: orderHash,
-      description: `SmartApp one-time order ${merchantReference}`,
-      redirectUrls,
+      description: `SmartApp one-time order ${orderId}`,
       merchantRedirect: redirectUrls.success,
-      merchantRedirectFail: redirectUrls.failure,
-      successRedirectUrl: redirectUrls.success,
-      failureRedirectUrl: redirectUrls.failure,
-      redirectUrl: redirectUrls.success,
-      webhookUrl: this.webhookUrl,
-      metadata: {
-        type: 'one_time',
-        order_id: String(order._id),
-      },
+      failureRedirect: true,
+      display: 'en',
+      type: 'external',
+      allowedMethods: 'card',
+      ...(this.webhookUrl ? { serverWebhook: this.webhookUrl } : {}),
+      metaData,
+      interactionSource: 'ECOMMERCE',
     };
 
     const response = await this._createKashierPaymentSession(payload);
@@ -146,7 +146,7 @@ class PaymentService {
     return {
       success: true,
       provider: this.provider,
-      payment_reference: merchantReference,
+      payment_reference: orderId,
       payment_url: response.payment_url,
       status: 'pending',
       message: 'Kashier one-time payment session created',
@@ -154,46 +154,40 @@ class PaymentService {
   }
 
   async createSubscriptionPayment(subscription, options = {}) {
-    const merchantReference = String(subscription._id);
+    const orderId = String(subscription._id);
     const amount = Number(subscription.initial_amount || 0);
     const amountString = normalizeAmountForHash(amount);
     const currency = subscription.currency || 'EGP';
-    const orderHash = this._generateOrderHash({
-      merchantReference,
-      amount,
-      currency,
-    });
     const customer = this._buildCustomerPayload({
       id: options.customer?.id || subscription.user_id,
-      name: options.customer?.name,
       email: options.customer?.email,
-      phone: options.customer?.phone,
     });
+    const metaData = encodeURIComponent(JSON.stringify({
+      type: 'subscription',
+      subscription_id: String(subscription._id),
+      billing_cycle: subscription.billing_cycle,
+    }));
+    const expireAt = new Date(Date.now() + (30 * 60 * 1000)).toISOString();
 
     const payload = {
+      expireAt,
+      maxFailureAttempts: 3,
+      paymentType: 'credit',
       merchantId: this.merchantId,
+      mode: this.mode,
       amount: amountString,
       currency,
-      merchantReference,
+      orderId,
       customer,
-      orderHash,
-      hash: orderHash,
-      description: `SmartApp subscription ${merchantReference}`,
-      redirectUrls: {
-        success: this.successRedirectUrl,
-        failure: this.failureRedirectUrl,
-      },
+      description: `SmartApp subscription ${orderId}`,
       merchantRedirect: this.successRedirectUrl,
-      merchantRedirectFail: this.failureRedirectUrl,
-      successRedirectUrl: this.successRedirectUrl,
-      failureRedirectUrl: this.failureRedirectUrl,
-      redirectUrl: this.successRedirectUrl,
-      webhookUrl: this.webhookUrl,
-      metadata: {
-        type: 'subscription',
-        subscription_id: String(subscription._id),
-        billing_cycle: subscription.billing_cycle,
-      },
+      failureRedirect: true,
+      display: 'en',
+      type: 'external',
+      allowedMethods: 'card',
+      ...(this.webhookUrl ? { serverWebhook: this.webhookUrl } : {}),
+      metaData,
+      interactionSource: 'ECOMMERCE',
     };
 
     const response = await this._createKashierPaymentSession(payload);
@@ -201,7 +195,7 @@ class PaymentService {
     return {
       success: true,
       provider: this.provider,
-      payment_reference: merchantReference,
+      payment_reference: orderId,
       payment_url: response.payment_url,
       status: 'pending',
       message: 'Kashier subscription initial payment session created',
@@ -233,8 +227,10 @@ class PaymentService {
     ).toLowerCase();
 
     const merchant_reference = String(
-      normalizedPayload.merchant_reference
-      || normalizedPayload.merchantReference
+      normalizedPayload.orderId
+      || normalizedPayload.order_id
+      || normalizedPayload.merchantOrderId
+      || normalizedPayload.merchant_reference
       || normalizedPayload.reference
       || '',
     );
@@ -515,29 +511,13 @@ class PaymentService {
     };
   }
 
-  _generateOrderHash({ merchantReference, amount, currency }) {
-    const normalizedReference = String(merchantReference || '').trim();
-    const normalizedAmount = normalizeAmountForHash(amount);
-    const normalizedCurrency = String(currency || 'EGP').trim().toUpperCase();
-    const payload = `${normalizedReference}${normalizedAmount}${normalizedCurrency}${this.apiKey}`;
-
-    return crypto
-      .createHash('sha256')
-      .update(payload)
-      .digest('hex');
-  }
-
   _buildCustomerPayload(input = {}) {
-    const name = String(input.name || '').trim() || 'SmartApp Customer';
     const email = String(input.email || '').trim() || 'customer@smartapp.app';
-    const phone = String(input.phone || '').replace(/\s+/g, '').trim() || '01000000000';
-    const reference = String(input.id || '').trim();
+    const reference = String(input.id || '').trim() || createReference('customer');
 
     return {
-      ...(reference ? { reference } : {}),
-      name,
+      reference,
       email,
-      phone,
     };
   }
 
