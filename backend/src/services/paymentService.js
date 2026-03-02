@@ -398,9 +398,7 @@ class PaymentService {
     }
 
     const requestPaymentLink = async (endpoint) => {
-      const authorizationHeader = /^bearer\s+/i.test(this.secret)
-        ? this.secret
-        : `Bearer ${this.secret}`;
+      const authorizationHeader = String(this.secret || '').trim();
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -433,9 +431,22 @@ class PaymentService {
       }
     }
 
-    const body = await response.json().catch(() => ({}));
+    const rawBody = await response.text().catch(() => '');
+    const body = (() => {
+      try {
+        return rawBody ? JSON.parse(rawBody) : {};
+      } catch (_error) {
+        return {};
+      }
+    })();
+
     if (!response.ok) {
-      throw new Error('Failed to create Kashier payment link');
+      const providerMessage = body?.message
+        || body?.error
+        || body?.errors?.[0]?.message
+        || rawBody.slice(0, 220)
+        || '';
+      throw new Error(`Failed to create Kashier payment link (${response.status})${providerMessage ? `: ${providerMessage}` : ''}`);
     }
 
     return {
