@@ -29,6 +29,12 @@ const normalizeKashierBaseUrl = (value) => {
   }
 };
 
+const normalizeAmountForHash = (value) => {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return '0.00';
+  return amount.toFixed(2);
+};
+
 const addDays = (date, days) => {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
@@ -96,12 +102,21 @@ class PaymentService {
     };
 
     const merchantReference = String(order._id);
+    const amount = Number(order.total || 0);
+    const currency = order.currency || 'EGP';
+    const orderHash = this._generateOrderHash({
+      merchantReference,
+      amount,
+      currency,
+    });
 
     const payload = {
       merchantId: this.merchantId,
-      amount: Number(order.total || 0),
-      currency: order.currency || 'EGP',
+      amount,
+      currency,
       merchantReference,
+      orderHash,
+      hash: orderHash,
       description: `SmartApp one-time order ${merchantReference}`,
       redirectUrls,
       webhookUrl: this.webhookUrl,
@@ -125,12 +140,21 @@ class PaymentService {
 
   async createSubscriptionPayment(subscription) {
     const merchantReference = String(subscription._id);
+    const amount = Number(subscription.initial_amount || 0);
+    const currency = subscription.currency || 'EGP';
+    const orderHash = this._generateOrderHash({
+      merchantReference,
+      amount,
+      currency,
+    });
 
     const payload = {
       merchantId: this.merchantId,
-      amount: Number(subscription.initial_amount || 0),
-      currency: subscription.currency || 'EGP',
+      amount,
+      currency,
       merchantReference,
+      orderHash,
+      hash: orderHash,
       description: `SmartApp subscription ${merchantReference}`,
       redirectUrls: {
         success: this.successRedirectUrl,
@@ -418,6 +442,18 @@ class PaymentService {
       payment_url: body.payment_url || body.url || body.data?.payment_url || body.data?.url || null,
       raw: body,
     };
+  }
+
+  _generateOrderHash({ merchantReference, amount, currency }) {
+    const normalizedReference = String(merchantReference || '').trim();
+    const normalizedAmount = normalizeAmountForHash(amount);
+    const normalizedCurrency = String(currency || 'EGP').trim().toUpperCase();
+    const payload = `${normalizedReference}${normalizedAmount}${normalizedCurrency}${this.apiKey}`;
+
+    return crypto
+      .createHash('sha256')
+      .update(payload)
+      .digest('hex');
   }
 
   async _findOrder({ order_id, payment_reference }) {
