@@ -6,6 +6,25 @@ dotenv.config();
 const kashierEnvPath = path.resolve(__dirname, '../kashair.env');
 if (fs.existsSync(kashierEnvPath)) {
   dotenv.config({ path: kashierEnvPath, override: false });
+
+  const rawKashierEnv = fs.readFileSync(kashierEnvPath, 'utf8');
+  rawKashierEnv
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && line.includes('='))
+    .forEach((line) => {
+      const index = line.indexOf('=');
+      const rawKey = line.slice(0, index).trim();
+      const rawValue = line.slice(index + 1).trim();
+
+      if (!rawKey || process.env[rawKey]) {
+        return;
+      }
+
+      process.env[rawKey] = rawValue;
+      process.env[rawKey.replace(/\s+/g, '_').toUpperCase()] = rawValue;
+      process.env[rawKey.replace(/\s+/g, '-')] = rawValue;
+    });
 }
 const express = require('express');
 const cors = require('cors');

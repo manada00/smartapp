@@ -39,6 +39,9 @@ class PaymentService {
       'SECRET_KEYS',
       'Secret Keys',
     );
+    if (!this.merchantId && this.secret.includes('$')) {
+      this.merchantId = this.secret.split('$')[0].trim();
+    }
     this.baseUrl = pickEnv('KASHIER_BASE_URL') || 'https://payments.kashier.io';
     this.webhookUrl = process.env.KASHIER_WEBHOOK_URL || '';
     this.storefrontBaseUrl = (
