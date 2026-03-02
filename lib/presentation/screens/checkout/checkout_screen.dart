@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -45,45 +46,43 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
 
       if (checkoutState.paymentMethod == PaymentMethod.card) {
-        final cardDetails = await Navigator.of(context).push<Map<String, String>>(
-          MaterialPageRoute(builder: (_) => const _MockCardPaymentScreen()),
-        );
-
-        if (cardDetails == null) {
-          return;
-        }
-
-        var response = await repository.placeOrder(
+        final session = await repository.createKashierCheckoutSession(
           items: cart.items,
           address: address,
-          paymentMethod: PaymentMethod.card,
-          cardDetails: cardDetails,
         );
 
         if (!mounted) {
           return;
         }
 
-        if (response.paymentStatus == 'failed' && mounted) {
-          final shouldRetry = await showDialog<bool>(
-            context: context,
-            builder: (ctx) => AlertDialog(
-              title: const Text('Payment Failed'),
-              content: const Text('Would you like to retry card payment now?'),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Later')),
-                FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Retry')),
-              ],
+        final checkoutResult = await Navigator.of(context).push<_KashierCheckoutResult>(
+          MaterialPageRoute(
+            builder: (_) => _KashierCheckoutScreen(
+              checkoutUrl: session.checkoutUrl,
+              successRedirectUrl: session.successRedirectUrl,
+              failureRedirectUrl: session.failureRedirectUrl,
             ),
-          );
+          ),
+        );
 
-          if (shouldRetry == true) {
-            response = await repository.retryCardPayment(
-              orderId: response.order.id,
-              cardDetails: cardDetails,
-            );
-          }
+        if (!mounted) {
+          return;
         }
+
+        final paymentResult = checkoutResult ?? _KashierCheckoutResult.cancelled;
+        final paymentStatus = paymentResult == _KashierCheckoutResult.success
+            ? await repository.waitForPaymentConfirmation(orderId: session.order.id)
+            : await repository.getOrderPaymentStatus(orderId: session.order.id);
+        final latestOrder = await repository.getOrderById(session.order.id);
+
+        final response = PaymentSimulationResponse(
+          order: latestOrder,
+          paymentStatus: paymentStatus.paymentStatus,
+          paymentMessage: _buildHostedCheckoutMessage(
+            redirectResult: paymentResult,
+            statusResult: paymentStatus,
+          ),
+        );
 
         await _finishCheckout(response);
         return;
@@ -121,6 +120,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         setState(() => _isPlacingOrder = false);
       }
     }
+  }
+
+  String _buildHostedCheckoutMessage({
+    required _KashierCheckoutResult redirectResult,
+    required OrderPaymentStatusResult statusResult,
+  }) {
+    if (statusResult.isPaid) {
+      return 'Payment confirmed successfully.';
+    }
+
+    if (statusResult.isFailed) {
+      return 'Payment failed. Please try again.';
+    }
+
+    if (redirectResult == _KashierCheckoutResult.cancelled) {
+      return 'Payment session was closed before completion.';
+    }
+
+    if (redirectResult == _KashierCheckoutResult.success) {
+      return 'Payment submitted. Awaiting final webhook confirmation.';
+    }
+
+    return 'Payment was not completed.';
   }
 
   Future<void> _finishCheckout(PaymentSimulationResponse response) async {
@@ -526,89 +548,119 @@ class _PaymentStep extends ConsumerWidget {
   }
 }
 
-class _MockCardPaymentScreen extends StatefulWidget {
-  const _MockCardPaymentScreen();
-
-  @override
-  State<_MockCardPaymentScreen> createState() => _MockCardPaymentScreenState();
+enum _KashierCheckoutResult {
+  success,
+  failure,
+  cancelled,
 }
 
-class _MockCardPaymentScreenState extends State<_MockCardPaymentScreen> {
-  final _cardController = TextEditingController(text: '4111111111111111');
-  final _expiryController = TextEditingController(text: '12/29');
-  final _cvvController = TextEditingController(text: '123');
+class _KashierCheckoutScreen extends StatefulWidget {
+  const _KashierCheckoutScreen({
+    required this.checkoutUrl,
+    required this.successRedirectUrl,
+    required this.failureRedirectUrl,
+  });
+
+  final String checkoutUrl;
+  final String successRedirectUrl;
+  final String failureRedirectUrl;
 
   @override
-  void dispose() {
-    _cardController.dispose();
-    _expiryController.dispose();
-    _cvvController.dispose();
-    super.dispose();
+  State<_KashierCheckoutScreen> createState() => _KashierCheckoutScreenState();
+}
+
+class _KashierCheckoutScreenState extends State<_KashierCheckoutScreen> {
+  late final WebViewController _controller;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            if (mounted) {
+              setState(() => _isLoading = true);
+            }
+          },
+          onPageFinished: (_) {
+            if (mounted) {
+              setState(() => _isLoading = false);
+            }
+          },
+          onNavigationRequest: (request) {
+            final result = _detectRedirectResult(request.url);
+            if (result != null) {
+              Navigator.of(context).pop(result);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(widget.checkoutUrl));
   }
 
-  void _submit() {
-    if (_cardController.text.trim().length < 12 || _cvvController.text.trim().length < 3) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter valid mock card details')));
-      return;
+  _KashierCheckoutResult? _detectRedirectResult(String url) {
+    final current = url.toLowerCase();
+    final success = widget.successRedirectUrl.toLowerCase();
+    final failure = widget.failureRedirectUrl.toLowerCase();
+
+    if (_isRedirectMatch(current, success) || current.contains('/payment-success')) {
+      return _KashierCheckoutResult.success;
     }
 
-    Navigator.of(context).pop({
-      'number': _cardController.text.trim(),
-      'expiry': _expiryController.text.trim(),
-      'cvv': _cvvController.text.trim(),
-    });
+    if (_isRedirectMatch(current, failure) || current.contains('/payment-failed')) {
+      return _KashierCheckoutResult.failure;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+
+    final status = (uri.queryParameters['status']
+            ?? uri.queryParameters['paymentStatus']
+            ?? uri.queryParameters['payment_status']
+            ?? '')
+        .toLowerCase();
+
+    if (status.contains('success') || status == 'paid') {
+      return _KashierCheckoutResult.success;
+    }
+
+    if (status.contains('fail') || status.contains('cancel')) {
+      return _KashierCheckoutResult.failure;
+    }
+
+    return null;
+  }
+
+  bool _isRedirectMatch(String currentUrl, String targetUrl) {
+    final currentPath = currentUrl.split('?').first;
+    final targetPath = targetUrl.split('?').first;
+    return currentPath == targetPath || currentUrl.startsWith(targetPath);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Secure Card Payment')),
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 12),
-              Text('Mock Payment Gateway', style: AppTextStyles.h5.copyWith(color: AppColors.textOnPrimary)),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: AppColors.cardShadow,
-                ),
-                child: Column(
-                  children: [
-                    TextField(controller: _cardController, decoration: const InputDecoration(labelText: 'Card Number')),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(controller: _expiryController, decoration: const InputDecoration(labelText: 'Expiry (MM/YY)')),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(controller: _cvvController, decoration: const InputDecoration(labelText: 'CVV')),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    AppButton(
-                      text: 'Pay Now',
-                      onPressed: _submit,
-                      gradient: AppColors.primaryGradient,
-                      width: double.infinity,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+      appBar: AppBar(
+        title: const Text('Secure Payment'),
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => Navigator.of(context).pop(_KashierCheckoutResult.cancelled),
         ),
+      ),
+      body: Stack(
+        children: [
+          WebViewWidget(controller: _controller),
+          if (_isLoading)
+            const Align(
+              alignment: Alignment.topCenter,
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+        ],
       ),
     );
   }

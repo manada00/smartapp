@@ -81,6 +81,16 @@ class ApiConstants {
   static const Duration connectTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
 
+  static final String _kashierRedirectBaseUrl = String.fromEnvironment(
+    'KASHIER_REDIRECT_BASE_URL',
+    defaultValue: 'https://smartapp-7jsj.vercel.app',
+  ).replaceFirst(RegExp(r'/$'), '');
+
+  static String get kashierSuccessRedirectUrl =>
+      '$_kashierRedirectBaseUrl/payment-success';
+  static String get kashierFailureRedirectUrl =>
+      '$_kashierRedirectBaseUrl/payment-failed';
+
   // Auth endpoints
   static const String sendOtp = '/auth/send-otp';
   static const String verifyOtp = '/auth/verify-otp';

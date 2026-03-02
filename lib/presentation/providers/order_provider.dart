@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/dio_client.dart';
@@ -83,6 +85,35 @@ class PaymentSimulationResponse {
   });
 }
 
+class HostedCheckoutSessionResponse {
+  final OrderModel order;
+  final String checkoutUrl;
+  final String successRedirectUrl;
+  final String failureRedirectUrl;
+
+  const HostedCheckoutSessionResponse({
+    required this.order,
+    required this.checkoutUrl,
+    required this.successRedirectUrl,
+    required this.failureRedirectUrl,
+  });
+}
+
+class OrderPaymentStatusResult {
+  final String paymentStatus;
+  final String orderStatus;
+  final bool webhookConfirmed;
+
+  const OrderPaymentStatusResult({
+    required this.paymentStatus,
+    required this.orderStatus,
+    required this.webhookConfirmed,
+  });
+
+  bool get isPaid => paymentStatus == 'paid' && webhookConfirmed;
+  bool get isFailed => paymentStatus == 'failed';
+}
+
 class OrderRepository {
   final DioClient _dioClient;
 
@@ -123,6 +154,76 @@ class OrderRepository {
     );
 
     return _mapPaymentResponse(response.data);
+  }
+
+  Future<HostedCheckoutSessionResponse> createKashierCheckoutSession({
+    required List<CartItemModel> items,
+    required AddressModel address,
+  }) async {
+    final subtotal = items.fold<double>(0, (sum, item) => sum + item.totalPrice);
+
+    final response = await _dioClient.post(
+      '${ApiConstants.orders}/create',
+      data: {
+        'items': items.map(_mapCartItemForApi).toList(),
+        'subtotal': subtotal,
+        'delivery_fee': 25,
+        'currency': 'EGP',
+        'payment_method': 'card',
+        'payment_provider': 'kashier',
+        'delivery_address': _mapAddressForApi(address),
+        'redirect_urls': {
+          'success': ApiConstants.kashierSuccessRedirectUrl,
+          'failure': ApiConstants.kashierFailureRedirectUrl,
+        },
+      },
+    );
+
+    final body = response.data as Map<String, dynamic>? ?? {};
+    final order = _mapOrder((body['data'] as Map<String, dynamic>? ?? {}));
+    final payment = body['payment'] as Map<String, dynamic>? ?? {};
+    final checkoutUrl = _asString(payment['payment_url']);
+
+    if (checkoutUrl.isEmpty) {
+      throw Exception('Kashier payment URL was not returned');
+    }
+
+    return HostedCheckoutSessionResponse(
+      order: order,
+      checkoutUrl: checkoutUrl,
+      successRedirectUrl: ApiConstants.kashierSuccessRedirectUrl,
+      failureRedirectUrl: ApiConstants.kashierFailureRedirectUrl,
+    );
+  }
+
+  Future<OrderPaymentStatusResult> getOrderPaymentStatus({required String orderId}) async {
+    final response = await _dioClient.get('${ApiConstants.orders}/$orderId/payment-status');
+    final data = (response.data as Map<String, dynamic>? ?? {})['data'] as Map<String, dynamic>? ?? {};
+
+    return OrderPaymentStatusResult(
+      paymentStatus: _asString(data['paymentStatus'], fallback: 'pending'),
+      orderStatus: _asString(data['orderStatus'], fallback: 'pending'),
+      webhookConfirmed: data['webhookConfirmed'] == true,
+    );
+  }
+
+  Future<OrderPaymentStatusResult> waitForPaymentConfirmation({
+    required String orderId,
+    Duration timeout = const Duration(seconds: 30),
+    Duration interval = const Duration(seconds: 3),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    OrderPaymentStatusResult? latest;
+
+    while (DateTime.now().isBefore(deadline)) {
+      latest = await getOrderPaymentStatus(orderId: orderId);
+      if (latest.isPaid || latest.isFailed) {
+        return latest;
+      }
+      await Future.delayed(interval);
+    }
+
+    return latest ?? getOrderPaymentStatus(orderId: orderId);
   }
 
   Future<PaymentSimulationResponse> retryCardPayment({
