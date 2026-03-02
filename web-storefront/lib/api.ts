@@ -35,12 +35,19 @@ export async function apiRequest<T>(path: string, options?: RequestOptions): Pro
 
       const data = await response.json();
       if (!response.ok || data?.success === false) {
-        throw new Error(data?.message || 'Request failed');
+        const apiError = new Error(data?.message || 'Request failed');
+        apiError.name = 'ApiResponseError';
+        throw apiError;
       }
 
       return data as T;
     } catch (e) {
       lastError = e instanceof Error ? e : new Error('Request failed');
+
+      if (lastError.name === 'ApiResponseError') {
+        throw lastError;
+      }
+
       if (isLastAttempt) {
         throw lastError;
       }
