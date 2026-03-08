@@ -48,6 +48,7 @@ const permissionsByRole: Record<AdminRole, Permission[]> = {
     'support.manage',
     'users.manage',
     'reports.read',
+    'monitoring.read',
   ],
 };
 
