@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const protectedRoutes = ['/dashboard', '/orders', '/menu', '/categories', '/users', '/reports', '/support', '/settings', '/monitoring'];
+const protectedRoutes = ['/dashboard', '/orders', '/menu', '/categories', '/users', '/reports', '/support', '/settings', '/monitoring', '/admin'];
 const roleRouteAccess: Record<string, string[]> = {
   '/menu': ['SUPER_ADMIN', 'OPERATIONS_ADMIN'],
   '/categories': ['SUPER_ADMIN', 'OPERATIONS_ADMIN'],
