@@ -2,6 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const dotenv = require('dotenv');
 
+dotenv.config({ path: '.environment' });
+dotenv.config({ path: path.resolve(__dirname, '../.environment'), override: false });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: false });
 dotenv.config();
 const kashierEnvPath = path.resolve(__dirname, '../kashair.env');
 if (fs.existsSync(kashierEnvPath)) {
@@ -80,13 +83,28 @@ const io = new Server(server, {
 });
 
 // Connect to database
-connectDB();
+connectDB().catch((error) => {
+  console.error(`Initial database connection failed: ${error.message}`);
+});
 
 // Middleware
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json());
+
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    return next();
+  } catch (error) {
+    console.error(`Database connection failed: ${error.message}`);
+    return res.status(503).json({
+      success: false,
+      message: 'Database connection unavailable',
+    });
+  }
+});
 
 // Make io accessible to routes
 app.set('io', io);

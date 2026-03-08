@@ -19,7 +19,7 @@ const akedlyAuthSessionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'success', 'failed'],
+    enum: ['pending', 'verified', 'success', 'failed'],
     default: 'pending',
     index: true,
   },
@@ -35,6 +35,10 @@ const akedlyAuthSessionSchema = new mongoose.Schema({
     default: false,
   },
   payload: mongoose.Schema.Types.Mixed,
+  metadata: mongoose.Schema.Types.Mixed,
+  verifiedAt: {
+    type: Date,
+  },
   expiresAt: {
     type: Date,
   },

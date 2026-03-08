@@ -1,4 +1,5 @@
 const express = require('express');
+const axios = require('axios');
 const { body, validationResult } = require('express-validator');
 const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
@@ -7,17 +8,26 @@ const { generateTokens, protect } = require('../middleware/auth');
 const { verifyFirebaseIdToken } = require('../config/firebase_admin');
 const { normalizeEgyptPhoneToE164 } = require('../utils/phone');
 const {
-  buildAkedlySignaturePayload,
   generateAkedlySignature,
-} = require('../utils/akedlySignature');
+  normalizePhoneNumber,
+  getSafeTimestamp,
+} = require('../utils/akedly');
 
 const router = express.Router();
 const googleOAuthClient = new OAuth2Client();
 const devOtpBypassEnabled = String(process.env.OTP_BYPASS_ENABLED || '').toLowerCase() === 'true';
 const devOtpBypassCode = String(process.env.OTP_BYPASS_CODE || '123456');
-const AKEDLY_CREATE_ATTEMPT_URL = 'https://api.akedly.io/api/v1/widget-sdk/create-attempt';
-const AKEDLY_TIMESTAMP_WINDOW_MS = 5 * 60 * 1000;
+const AKEDLY_CREATE_ATTEMPT_URL = `${String(process.env.AKEDLY_API_URL || 'https://api.akedly.io').replace(/\/$/, '')}/api/v1/widget-sdk/create-attempt`;
 const AKEDLY_SESSION_TTL_MS = 15 * 60 * 1000;
+const AKEDLY_ERROR_MAP = {
+  INVALID_SIGNATURE: { statusCode: 400, message: 'Signature error' },
+  SIGNATURE_EXPIRED: { statusCode: 400, message: 'Request expired' },
+  INVALID_API_KEY: { statusCode: 401, message: 'Invalid API key' },
+  INVALID_PUBLIC_KEY: { statusCode: 400, message: 'Widget misconfigured' },
+  WIDGET_INACTIVE: { statusCode: 503, message: 'Widget disabled' },
+  RATE_LIMIT_PHONENUMBER_ATTEMPTS: { statusCode: 429, message: 'Too many attempts' },
+  CIRCUIT_BREAKER_OPEN: { statusCode: 503, message: 'Service temporarily unavailable' },
+};
 
 const createReferralCode = () => `SF${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
@@ -81,7 +91,7 @@ router.post('/otp/start', [
 
     let phoneNumber;
     try {
-      phoneNumber = normalizeEgyptPhoneToE164(req.body.phoneNumber);
+      phoneNumber = normalizePhoneNumber(req.body.phoneNumber);
     } catch (error) {
       return res.status(400).json({
         success: false,
@@ -89,85 +99,90 @@ router.post('/otp/start', [
       });
     }
 
-    const timestamp = Date.now();
-    if (Math.abs(Date.now() - timestamp) > AKEDLY_TIMESTAMP_WINDOW_MS) {
-      return res.status(400).json({
-        success: false,
-        message: 'Request timestamp is outside the allowed 5-minute window',
-      });
-    }
-
-    const signingPayload = buildAkedlySignaturePayload({
+    const timestamp = getSafeTimestamp();
+    const signature = generateAkedlySignature({
       apiKey,
       publicKey,
+      secret,
       timestamp,
       phoneNumber,
     });
-    const signature = generateAkedlySignature(signingPayload, secret);
 
     const requestBody = {
-      ...signingPayload,
+      apiKey,
+      publicKey,
       signature,
+      timestamp,
+      verificationAddress: {
+        phoneNumber,
+        ...(req.body.email ? { email: String(req.body.email).trim() } : {}),
+      },
+      digits: 6,
+      publicMetadata: {
+        ...(req.body.userId ? { userId: String(req.body.userId).trim() } : {}),
+        source: 'noreapp_test',
+      },
+      privateMetadata: {
+        pipelineId: process.env.AKEDLY_PIPELINE_ID,
+        widgetId: process.env.AKEDLY_WIDGET_ID,
+        requestIp: req.ip,
+      },
     };
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    let providerBody;
+    let statusCode = 502;
 
-    let providerResponse;
-    try {
-      providerResponse = await fetch(AKEDLY_CREATE_ATTEMPT_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const providerResponse = await axios.post(AKEDLY_CREATE_ATTEMPT_URL, requestBody, {
+          timeout: 10000,
+        });
+        providerBody = providerResponse.data || {};
+        statusCode = providerResponse.status;
+        break;
+      } catch (error) {
+        const timedOut = error?.code === 'ECONNABORTED' || /timeout/i.test(String(error?.message || ''));
+        if (timedOut && attempt === 0) {
+          continue;
+        }
+
+        statusCode = error?.response?.status || 502;
+        providerBody = error?.response?.data || {};
+        if (!providerBody || Object.keys(providerBody).length === 0) {
+          providerBody = { error: { code: timedOut ? 'REQUEST_TIMEOUT' : 'AKEDLY_START_FAILED' } };
+        }
+        break;
+      }
     }
 
-    const rawBody = await providerResponse.text().catch(() => '');
-    const providerBody = (() => {
-      try {
-        return rawBody ? JSON.parse(rawBody) : {};
-      } catch (_error) {
-        return {};
-      }
-    })();
+    if (statusCode >= 400 || providerBody.success === false) {
+      console.error('[Akedly OTP Start Error]', {
+        statusCode,
+        code: providerBody?.code || providerBody?.errorCode || providerBody?.error?.code,
+        message: providerBody?.message || providerBody?.error?.message,
+        response: providerBody,
+      });
 
-    if (!providerResponse.ok || providerBody.success === false) {
       const providerCode = String(
         providerBody.code
         || providerBody.errorCode
         || providerBody.error?.code
         || '',
       ).toUpperCase();
-      const providerMessage = providerBody.message
-        || providerBody.error?.message
-        || rawBody.slice(0, 220)
-        || 'Unable to start OTP verification';
 
-      if (providerResponse.status === 429 || providerCode.includes('RATE_LIMIT')) {
-        return res.status(429).json({
+      const mappedError = AKEDLY_ERROR_MAP[providerCode];
+      if (mappedError) {
+        return res.status(mappedError.statusCode).json({
           success: false,
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: 'Akedly rate limit reached. Please try again shortly.',
-        });
-      }
-
-      if (providerCode === 'INVALID_SIGNATURE' || providerResponse.status === 401 || providerResponse.status === 403) {
-        return res.status(400).json({
-          success: false,
-          code: 'INVALID_SIGNATURE',
-          message: 'Akedly signature validation failed.',
+          code: providerCode,
+          message: mappedError.message,
         });
       }
 
       return res.status(502).json({
         success: false,
         code: providerCode || 'AKEDLY_START_FAILED',
-        message: providerMessage,
+        message: 'Unable to start OTP verification',
       });
     }
 
@@ -184,11 +199,19 @@ router.post('/otp/start', [
     const attemptId = String(
       providerBody.attemptId
       || providerBody.attempt_id
+      || providerBody.widgetAttempt?.attemptId
+      || providerBody.widgetAttempt?.attempt_id
       || providerBody.data?.attemptId
       || providerBody.data?.attempt_id
       || providerBody.id
       || '',
     ).trim();
+
+    const expiresAtRaw = providerBody.expiresAt
+      || providerBody.expires_at
+      || providerBody.data?.expiresAt
+      || providerBody.data?.expires_at;
+    const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : new Date(Date.now() + AKEDLY_SESSION_TTL_MS);
 
     if (!iframeUrl || !attemptId) {
       return res.status(502).json({
@@ -205,8 +228,12 @@ router.post('/otp/start', [
           attemptId,
           phone: phoneNumber,
           status: 'pending',
+          metadata: {
+            userId: req.body.userId ? String(req.body.userId).trim() : undefined,
+            email: req.body.email ? String(req.body.email).trim() : undefined,
+          },
           payload: providerBody,
-          expiresAt: new Date(Date.now() + AKEDLY_SESSION_TTL_MS),
+          expiresAt,
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true },
@@ -216,101 +243,62 @@ router.post('/otp/start', [
       success: true,
       iframeUrl,
       attemptId,
+      expiresAt,
     });
   } catch (error) {
-    if (error.name === 'AbortError') {
-      return res.status(504).json({
-        success: false,
-        message: 'Timed out while contacting Akedly',
-      });
-    }
-
+    console.error('[Akedly OTP Start Unexpected Error]', error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Failed to start OTP verification',
+      message: 'Failed to start OTP verification',
     });
   }
+});
+
+router.get('/otp/test-config', (req, res) => {
+  res.json({
+    akedly: {
+      apiKeyLoaded: Boolean(process.env.AKEDLY_API_KEY),
+      publicKeyLoaded: Boolean(process.env.AKEDLY_PUBLIC_KEY),
+      secretLoaded: Boolean(process.env.AKEDLY_SECRET),
+    },
+  });
 });
 
 router.get('/otp/session', async (req, res) => {
   try {
     const attemptId = String(req.query.attemptId || '').trim();
-    const transactionId = String(req.query.transactionId || '').trim();
-
-    if (!attemptId && !transactionId) {
+    if (!attemptId) {
       return res.status(400).json({
         success: false,
-        message: 'attemptId or transactionId is required',
+        message: 'attemptId is required',
       });
     }
 
-    const filters = [];
-    if (attemptId) filters.push({ attemptId });
-    if (transactionId) filters.push({ transactionId });
-
-    const session = await AkedlyAuthSession.findOne({ $or: filters })
-      .populate('user', 'phone name isOnboardingComplete')
-      .sort({ updatedAt: -1 });
+    const session = await AkedlyAuthSession.findOne({ attemptId }).sort({ updatedAt: -1 });
 
     if (!session) {
-      return res.status(202).json({
-        success: true,
-        pending: true,
-        message: 'Awaiting verification webhook',
-      });
-    }
-
-    if (session.expiresAt && session.expiresAt.getTime() < Date.now()) {
-      return res.status(410).json({
-        success: false,
-        message: 'OTP session expired',
-      });
-    }
-
-    if (session.status === 'failed') {
       return res.json({
         success: true,
-        pending: false,
-        failed: true,
-        message: 'OTP verification failed',
+        status: 'pending',
       });
     }
 
-    if (session.status !== 'success' || !session.accessToken || !session.refreshToken) {
-      return res.status(202).json({
+    if (session.status === 'verified' || session.status === 'success') {
+      return res.json({
         success: true,
-        pending: true,
-        message: 'Awaiting verification webhook',
-      });
-    }
-
-    let user = session.user;
-    if (!user && session.phone) {
-      user = await User.findOne({ phone: session.phone }).select('phone name isOnboardingComplete');
-    }
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'Verified user account not found',
+        status: 'verified',
+        data: {
+          attemptId: session.attemptId,
+          transactionId: session.transactionId,
+          phoneNumber: session.phone,
+          verifiedAt: session.verifiedAt,
+        },
       });
     }
 
     return res.json({
       success: true,
-      data: {
-        user: {
-          id: user._id,
-          phone: user.phone,
-          name: user.name,
-          isOnboardingComplete: user.isOnboardingComplete,
-        },
-        isNewUser: session.isNewUser === true,
-        accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
-        attemptId: session.attemptId,
-        transactionId: session.transactionId,
-      },
+      status: 'pending',
     });
   } catch (error) {
     return res.status(500).json({
