@@ -1,0 +1,51 @@
+const { registerRequest, registerError } = require('../services/system/runtimeState');
+const { logSystemEvent } = require('../services/system/systemLogger');
+
+const resolveService = (path) => {
+  if (String(path).includes('/webhooks')) return 'webhook';
+  if (String(path).includes('/admin')) return 'admin_api';
+  return 'backend_api';
+};
+
+const trackRequestMetrics = (req, res, next) => {
+  registerRequest(req);
+
+  res.on('finish', () => {
+    if (res.statusCode >= 500) {
+      registerError();
+      void logSystemEvent({
+        level: 'error',
+        service: resolveService(req.path),
+        message: `${req.method} ${req.originalUrl} failed with status ${res.statusCode}`,
+      });
+    }
+  });
+
+  next();
+};
+
+const captureUnhandledErrors = () => {
+  process.on('uncaughtException', (error) => {
+    void logSystemEvent({
+      level: 'error',
+      service: 'process',
+      message: `Uncaught exception: ${error.message}`,
+      stackTrace: error,
+    });
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    const error = reason instanceof Error ? reason : new Error(String(reason));
+    void logSystemEvent({
+      level: 'error',
+      service: 'process',
+      message: `Unhandled rejection: ${error.message}`,
+      stackTrace: error,
+    });
+  });
+};
+
+module.exports = {
+  trackRequestMetrics,
+  captureUnhandledErrors,
+};
