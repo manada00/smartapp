@@ -1,3 +1,4 @@
+const axios = require('axios');
 const SystemMetric = require('../../models/SystemMetric');
 const SystemAlert = require('../../models/SystemAlert');
 const {
@@ -38,6 +39,17 @@ const createAlertIfNeeded = async ({ type, service, message, severity = 'warning
 };
 
 const runMetricsCollection = async () => {
+  const apiLatencyProbe = await (async () => {
+    const healthUrl = process.env.INTERNAL_HEALTH_URL || `http://127.0.0.1:${process.env.PORT || 3000}/health`;
+    const start = Date.now();
+    try {
+      await axios.get(healthUrl, { timeout: 4000 });
+      return Date.now() - start;
+    } catch (_) {
+      return null;
+    }
+  })();
+
   const [{ cpuUsage, memoryUsage }, requestMetrics, activeUsers, database, services, vercel] = await Promise.all([
     Promise.resolve(getProcessMetrics()),
     Promise.resolve(getRequestMetrics()),
@@ -47,7 +59,7 @@ const runMetricsCollection = async () => {
     getVercelStatus(),
   ]);
 
-  const apiLatencyMs = Number(memoryUsage?.rss ? Math.round((memoryUsage.rss / (1024 * 1024)) / 10) : 0);
+  const apiLatencyMs = apiLatencyProbe;
 
   await SystemMetric.create({
     timestamp: new Date(),
