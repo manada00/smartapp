@@ -129,6 +129,26 @@ export function SystemHealthDashboard() {
     cpuUsage: metrics.map((point) => Number(point.cpuUsage || 0)).slice(-30),
   }), [metrics]);
 
+  const serviceCards = useMemo(() => {
+    const dynamicServices = (health?.services || []).map((service) => ({
+      label: service.service,
+      status: service.status,
+      latency: service.latency || null,
+      error: service.error,
+    }));
+
+    return [
+      { label: 'Backend API', status: health ? 'online' : 'offline', latency: null, error: error || undefined },
+      {
+        label: 'MongoDB',
+        status: health?.database.database === 'connected' ? 'online' : 'offline',
+        latency: health ? `${health.database.latencyMs}ms` : null,
+        error: health?.database.message,
+      },
+      ...dynamicServices,
+    ];
+  }, [error, health]);
+
   return (
     <div className="grid" style={{ gap: 16 }}>
       <Card>
@@ -137,13 +157,9 @@ export function SystemHealthDashboard() {
       </Card>
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-        {[
-          { name: 'Backend API', status: health ? 'online' : 'offline', latency: null, error: error || undefined },
-          { name: 'MongoDB', status: health?.database.database === 'connected' ? 'online' : 'offline', latency: health ? `${health.database.latencyMs}ms` : null, error: health?.database.message },
-          ...(health?.services || []),
-        ].map((service) => (
-          <Card key={service.name || service.service}>
-            <h3>{service.name || service.service}</h3>
+        {serviceCards.map((service) => (
+          <Card key={service.label}>
+            <h3>{service.label}</h3>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Badge tone={(service.status === 'online' || service.status === 'connected') ? 'success' : 'danger'}>
                 {service.status === 'online' ? 'Online' : 'Offline'}
