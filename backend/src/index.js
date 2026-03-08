@@ -36,6 +36,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const connectDB = require('./config/database');
 const User = require('./models/User');
+const { trackRequestMetrics, captureUnhandledErrors } = require('./middleware/systemMonitoring');
+const { startMetricsCollector } = require('./services/system/metricsCollector');
+const { logSystemEvent } = require('./services/system/systemLogger');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -92,6 +95,7 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(morgan('dev'));
 app.use(express.json());
+app.use(trackRequestMetrics);
 
 app.use(async (req, res, next) => {
   try {
@@ -120,6 +124,7 @@ app.use('/api/v1/webhooks', webhookRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/v1/admin/auth', adminAuthRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Alias routes for future provider integrations
 app.use('/auth', authRoutes);
@@ -182,6 +187,12 @@ app.set('emitOrderUpdate', emitOrderUpdate);
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  void logSystemEvent({
+    level: 'error',
+    service: req.path.includes('/webhooks') ? 'webhook' : 'backend_api',
+    message: err.message || 'Unhandled API error',
+    stackTrace: err,
+  });
   res.status(500).json({
     success: false,
     message: 'Something went wrong!',
@@ -204,5 +215,8 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
     console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   });
 }
+
+captureUnhandledErrors();
+startMetricsCollector();
 
 module.exports = app;
