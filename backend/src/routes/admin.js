@@ -9,10 +9,22 @@ const AppConfig = require('../models/AppConfig');
 const User = require('../models/User');
 const AdminUser = require('../models/AdminUser');
 const SupportTicket = require('../models/SupportTicket');
+const SystemLog = require('../models/SystemLog');
+const SystemMetric = require('../models/SystemMetric');
+const SystemAlert = require('../models/SystemAlert');
 const { protectAdmin, requireRoles } = require('../middleware/adminAuth');
 const { syncOrderPaymentToSupabase } = require('../services/payment/supabaseOrderSync');
 const { sendOrderConfirmationEmail } = require('../services/email/orderConfirmationService');
 const { sendSupportReplyEmail } = require('../services/email/supportEmailService');
+const {
+  getApiHealth,
+  getDatabaseHealth,
+  getExternalServicesHealth,
+  getGithubStatus,
+  getVercelStatus,
+  getMobileApiConnectivity,
+} = require('../services/system/systemHealthService');
+const { getActiveUsers, getRequestMetrics } = require('../services/system/runtimeState');
 
 const router = express.Router();
 
@@ -1322,6 +1334,104 @@ router.get('/reports', async (req, res) => {
         })),
       },
     });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/system-health', async (req, res) => {
+  try {
+    const [database, externalServices, github, vercel, mobileApi, activeUsers, requestMetrics] = await Promise.all([
+      getDatabaseHealth(),
+      getExternalServicesHealth(),
+      getGithubStatus(),
+      getVercelStatus(),
+      getMobileApiConnectivity(),
+      Promise.resolve(getActiveUsers()),
+      Promise.resolve(getRequestMetrics()),
+    ]);
+
+    const services = [
+      ...externalServices,
+      mobileApi,
+      {
+        service: 'MongoDB',
+        status: database.database === 'connected' ? 'online' : 'offline',
+        latency: `${database.latencyMs}ms`,
+        latencyMs: database.latencyMs,
+        error: database.message,
+      },
+      {
+        service: 'GitHub API',
+        status: github.status === 'online' ? 'online' : 'offline',
+        latency: null,
+        latencyMs: null,
+        error: github.error,
+      },
+      {
+        service: 'Vercel Deployment',
+        status: vercel.status === 'online' && vercel.vercelStatus === 'READY' ? 'online' : 'offline',
+        latency: null,
+        latencyMs: null,
+        error: vercel.error,
+      },
+    ];
+
+    return res.json({
+      success: true,
+      data: {
+        api: getApiHealth(),
+        database,
+        services,
+        github,
+        vercel,
+        activeUsers,
+        requestMetrics,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/logs', async (req, res) => {
+  try {
+    const logs = await SystemLog.find({})
+      .sort({ timestamp: -1 })
+      .limit(100)
+      .select('timestamp service level message stackTrace');
+
+    return res.json({ success: true, data: logs });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/system-metrics', async (req, res) => {
+  try {
+    const minutes = Math.max(5, Math.min(24 * 60, Number(req.query.minutes || 120)));
+    const since = new Date(Date.now() - minutes * 60 * 1000);
+
+    const metrics = await SystemMetric.find({ timestamp: { $gte: since } })
+      .sort({ timestamp: 1 })
+      .limit(500);
+
+    return res.json({
+      success: true,
+      data: metrics,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/system-alerts', async (req, res) => {
+  try {
+    const alerts = await SystemAlert.find({ resolved: false })
+      .sort({ timestamp: -1 })
+      .limit(100);
+
+    return res.json({ success: true, data: alerts });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
