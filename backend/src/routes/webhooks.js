@@ -1,6 +1,7 @@
 const express = require('express');
 const { PaymentService } = require('../services/paymentService');
 const AkedlyAuthSession = require('../models/AkedlyAuthSession');
+const { logSystemEvent } = require('../services/system/systemLogger');
 
 const router = express.Router();
 const paymentService = new PaymentService();
@@ -38,6 +39,12 @@ const handleKashierWebhook = async (req, res) => {
     });
   } catch (error) {
     console.error(`Kashier webhook handling failed: ${error.message}`);
+    await logSystemEvent({
+      level: 'error',
+      service: 'webhook',
+      message: `Kashier webhook failed: ${error.message}`,
+      stackTrace: error,
+    });
     return res.status(500).json({
       success: false,
       message: 'Webhook processing failed',
@@ -130,6 +137,12 @@ router.post('/akedly', async (req, res) => {
     }
   } catch (webhookError) {
     console.error('[Akedly Webhook Processing Error]', webhookError);
+    await logSystemEvent({
+      level: 'error',
+      service: 'webhook',
+      message: `Akedly webhook failed: ${webhookError.message}`,
+      stackTrace: webhookError,
+    });
   }
 
   return res.status(200).json({ received: true });
