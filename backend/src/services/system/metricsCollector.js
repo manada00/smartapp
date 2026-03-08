@@ -1,6 +1,8 @@
 const axios = require('axios');
+const mongoose = require('mongoose');
 const SystemMetric = require('../../models/SystemMetric');
 const SystemAlert = require('../../models/SystemAlert');
+const connectDB = require('../../config/database');
 const {
   getProcessMetrics,
   getRequestMetrics,
@@ -39,6 +41,14 @@ const createAlertIfNeeded = async ({ type, service, message, severity = 'warning
 };
 
 const runMetricsCollection = async () => {
+  if (mongoose.connection.readyState !== 1) {
+    try {
+      await connectDB();
+    } catch (_) {
+      return;
+    }
+  }
+
   const apiLatencyProbe = await (async () => {
     const healthUrl = process.env.INTERNAL_HEALTH_URL || `http://127.0.0.1:${process.env.PORT || 3000}/health`;
     const start = Date.now();

@@ -86,7 +86,7 @@ const io = new Server(server, {
 });
 
 // Connect to database
-connectDB().catch((error) => {
+const initialConnection = connectDB().catch((error) => {
   console.error(`Initial database connection failed: ${error.message}`);
 });
 
@@ -217,6 +217,13 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 }
 
 captureUnhandledErrors();
-startMetricsCollector();
+
+if (!process.env.VERCEL) {
+  initialConnection
+    .then(() => {
+      startMetricsCollector();
+    })
+    .catch(() => {});
+}
 
 module.exports = app;

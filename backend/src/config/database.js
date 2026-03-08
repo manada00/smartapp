@@ -1,5 +1,7 @@
 const mongoose = require('mongoose');
 
+mongoose.set('bufferCommands', false);
+
 let connectionPromise = null;
 
 const connectDB = async () => {
@@ -9,6 +11,16 @@ const connectDB = async () => {
     }
 
     if (connectionPromise) {
+      return connectionPromise;
+    }
+
+    if (mongoose.connection.readyState === 2 && mongoose.connection.asPromise) {
+      connectionPromise = mongoose.connection.asPromise()
+        .then(() => mongoose.connection)
+        .catch((error) => {
+          connectionPromise = null;
+          throw error;
+        });
       return connectionPromise;
     }
 
