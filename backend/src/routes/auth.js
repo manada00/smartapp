@@ -5,6 +5,7 @@ const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const AkedlyAuthSession = require('../models/AkedlyAuthSession');
 const { generateTokens, protect } = require('../middleware/auth');
+const { otpStartIpLimiter, otpStartPhoneLimiter } = require('../middleware/otpRateLimiter');
 const { verifyFirebaseIdToken } = require('../config/firebase_admin');
 const { normalizeEgyptPhoneToE164 } = require('../utils/phone');
 const {
@@ -64,6 +65,8 @@ const verifyGoogleIdToken = async (idToken) => {
 const otpStore = new Map();
 
 router.post('/otp/start', [
+  otpStartIpLimiter,
+  otpStartPhoneLimiter,
   body('phoneNumber').isString().notEmpty().withMessage('phoneNumber is required'),
 ], async (req, res) => {
   try {
