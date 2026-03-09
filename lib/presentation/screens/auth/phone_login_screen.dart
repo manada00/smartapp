@@ -225,9 +225,11 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                 errorText: _errorText,
                 autofocus: true,
                 onChanged: (_) {
-                  if (_errorText != null) {
-                    setState(() => _errorText = null);
-                  }
+                  setState(() {
+                    if (_errorText != null) {
+                      _errorText = null;
+                    }
+                  });
                 },
               ),
               const SizedBox(height: 24),
@@ -246,6 +248,15 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                     color: AppColors.textSecondary,
                   ),
                   textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Center(
+                child: TextButton(
+                  onPressed: _isValidPhone && !_isLoading
+                      ? _startPhoneLogin
+                      : null,
+                  child: const Text('Create new profile'),
                 ),
               ),
               const SizedBox(height: 52),
