@@ -11,7 +11,9 @@ const generateAkedlySignature = ({
     apiKey,
     publicKey,
     timestamp,
-    phoneNumber,
+    verificationAddress: {
+      phoneNumber,
+    },
   });
 
   return crypto

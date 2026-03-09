@@ -10,7 +10,6 @@ const { normalizeEgyptPhoneToE164 } = require('../utils/phone');
 const {
   generateAkedlySignature,
   normalizePhoneNumber,
-  getSafeTimestamp,
 } = require('../utils/akedly');
 
 const router = express.Router();
@@ -99,7 +98,7 @@ router.post('/otp/start', [
       });
     }
 
-    const timestamp = getSafeTimestamp();
+    const timestamp = Date.now();
     const signature = generateAkedlySignature({
       apiKey,
       publicKey,
@@ -115,19 +114,11 @@ router.post('/otp/start', [
       timestamp,
       verificationAddress: {
         phoneNumber,
-        ...(req.body.email ? { email: String(req.body.email).trim() } : {}),
       },
       digits: 6,
-      publicMetadata: {
-        ...(req.body.userId ? { userId: String(req.body.userId).trim() } : {}),
-        source: 'noreapp_test',
-      },
-      privateMetadata: {
-        pipelineId: process.env.AKEDLY_PIPELINE_ID,
-        widgetId: process.env.AKEDLY_WIDGET_ID,
-        requestIp: req.ip,
-      },
     };
+
+    console.log('[Akedly OTP Start Request Body]', requestBody);
 
     let providerBody;
     let statusCode = 502;
