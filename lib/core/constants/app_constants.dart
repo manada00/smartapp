@@ -106,6 +106,7 @@ class ApiConstants {
   static const String healthGoals = '/user/health-goals';
   static const String dietaryPreferences = '/user/dietary-preferences';
   static const String dailyRoutine = '/user/daily-routine';
+  static const String users = '/users';
 
   // Address endpoints
   static const String addresses = '/user/addresses';

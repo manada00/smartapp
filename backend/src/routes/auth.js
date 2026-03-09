@@ -261,38 +261,102 @@ router.get('/otp/test-config', (req, res) => {
 router.get('/otp/session', async (req, res) => {
   try {
     const attemptId = String(req.query.attemptId || '').trim();
-    if (!attemptId) {
+    const transactionId = String(req.query.transactionId || '').trim();
+    if (!attemptId && !transactionId) {
       return res.status(400).json({
         success: false,
-        message: 'attemptId is required',
+        message: 'attemptId or transactionId is required',
       });
     }
 
-    const session = await AkedlyAuthSession.findOne({ attemptId }).sort({ updatedAt: -1 });
+    const sessionQuery = attemptId ? { attemptId } : { transactionId };
+    const session = await AkedlyAuthSession.findOne(sessionQuery).sort({ updatedAt: -1 });
 
     if (!session) {
       return res.json({
         success: true,
-        status: 'pending',
+        pending: true,
+      });
+    }
+
+    if (session.status === 'failed') {
+      return res.json({
+        success: true,
+        failed: true,
+        message: 'OTP verification failed',
+      });
+    }
+
+    if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
+      return res.json({
+        success: true,
+        failed: true,
+        message: 'OTP session expired. Please retry',
       });
     }
 
     if (session.status === 'verified' || session.status === 'success') {
+      const normalizedPhone = String(session.phoneNumber || session.phone || '').trim();
+      const existingUser = normalizedPhone
+        ? await User.findOne({
+            $or: [{ phone: normalizedPhone }, { phoneNumber: normalizedPhone }],
+          })
+        : null;
+
+      if (existingUser) {
+        if (existingUser.isBlocked) {
+          return res.json({
+            success: true,
+            failed: true,
+            message: 'User account is blocked',
+          });
+        }
+
+        const tokens = generateTokens(existingUser._id);
+        existingUser.refreshTokens.push(tokens.refreshToken);
+        existingUser.phoneVerified = true;
+        await existingUser.save();
+
+        session.status = 'success';
+        session.user = existingUser._id;
+        session.accessToken = tokens.accessToken;
+        session.refreshToken = tokens.refreshToken;
+        session.isNewUser = false;
+        await session.save();
+
+        return res.json({
+          success: true,
+          data: {
+            user: {
+              id: existingUser._id,
+              phone: existingUser.phone,
+              phoneNumber: existingUser.phoneNumber,
+              name: existingUser.name,
+              email: existingUser.email,
+              isOnboardingComplete: existingUser.isOnboardingComplete,
+            },
+            isNewUser: false,
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+          },
+        });
+      }
+
       return res.json({
         success: true,
-        status: 'verified',
         data: {
           attemptId: session.attemptId,
           transactionId: session.transactionId,
-          phoneNumber: session.phone,
+          phoneNumber: normalizedPhone,
           verifiedAt: session.verifiedAt,
+          isNewUser: true,
         },
       });
     }
 
     return res.json({
       success: true,
-      status: 'pending',
+      pending: true,
     });
   } catch (error) {
     return res.status(500).json({

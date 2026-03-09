@@ -32,13 +32,28 @@ class AkedlyOtpStartResponse {
   });
 }
 
+class PendingProfileContext {
+  final String phoneNumber;
+  final String attemptId;
+  final String? transactionId;
+
+  const PendingProfileContext({
+    required this.phoneNumber,
+    required this.attemptId,
+    this.transactionId,
+  });
+}
+
 class AuthNotifier extends StateNotifier<AuthState> {
   final SecureStorage _secureStorage;
   final LocalStorage _localStorage;
   final DioClient _dioClient;
+  PendingProfileContext? _pendingProfileContext;
 
   AuthNotifier(this._secureStorage, this._localStorage, this._dioClient)
     : super(const AuthState.initial());
+
+  PendingProfileContext? get pendingProfileContext => _pendingProfileContext;
 
   Future<void> checkAuthState() async {
     state = const AuthState.loading();
@@ -177,6 +192,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
           return false;
         }
 
+        final isNewUser = data['isNewUser'] == true;
+
+        if (isNewUser) {
+          final resolvedPhone = (data['phoneNumber'] ?? '').toString().trim();
+          final resolvedAttemptId = (data['attemptId'] ?? attemptId ?? '')
+              .toString()
+              .trim();
+          final resolvedTransactionId =
+              (data['transactionId'] ?? transactionId ?? '').toString().trim();
+
+          if (resolvedPhone.isEmpty || resolvedAttemptId.isEmpty) {
+            state = const AuthState.error('Missing verified phone details.');
+            return false;
+          }
+
+          _pendingProfileContext = PendingProfileContext(
+            phoneNumber: resolvedPhone,
+            attemptId: resolvedAttemptId,
+            transactionId: resolvedTransactionId.isEmpty
+                ? null
+                : resolvedTransactionId,
+          );
+
+          await _localStorage.setFirstLaunchComplete();
+          state = AuthState.needsProfileCreation(_pendingProfileContext!);
+          return true;
+        }
+
         final accessToken = (data['accessToken'] ?? '').toString();
         final refreshToken = (data['refreshToken'] ?? '').toString();
         final user = data['user'] as Map<String, dynamic>? ?? {};
@@ -191,13 +234,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
         await _secureStorage.setUserId(user['id'].toString());
         await _localStorage.setFirstLaunchComplete();
 
-        final isNewUser = data['isNewUser'] == true;
-        if (isNewUser) {
-          state = const AuthState.needsOnboarding();
-        } else {
-          await _localStorage.setOnboardingComplete();
-          state = const AuthState.authenticated();
-        }
+        _pendingProfileContext = null;
+        await _localStorage.setOnboardingComplete();
+        state = const AuthState.authenticated();
 
         return true;
       } on DioException catch (e) {
@@ -225,6 +264,70 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     state = const AuthState.error('Verification timed out. Please try again.');
     return false;
+  }
+
+  Future<bool> createAccountFromOtp({
+    required String firstName,
+    required String lastName,
+    String? email,
+    Map<String, dynamic>? deliveryAddress,
+  }) async {
+    final context = _pendingProfileContext;
+    if (context == null) {
+      state = const AuthState.error('Missing OTP verification context.');
+      return false;
+    }
+
+    state = const AuthState.loading();
+
+    try {
+      final response = await _dioClient.post(
+        ApiConstants.users,
+        data: {
+          'phoneNumber': context.phoneNumber,
+          'firstName': firstName.trim(),
+          'lastName': lastName.trim(),
+          if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+          'attemptId': context.attemptId,
+          if (context.transactionId != null)
+            'transactionId': context.transactionId,
+          if (deliveryAddress != null) 'deliveryAddress': deliveryAddress,
+        },
+      );
+
+      final body = response.data as Map<String, dynamic>? ?? {};
+      final data = body['data'] as Map<String, dynamic>? ?? {};
+
+      final accessToken = (data['accessToken'] ?? '').toString();
+      final refreshToken = (data['refreshToken'] ?? '').toString();
+      final user = data['user'] as Map<String, dynamic>? ?? {};
+
+      if (accessToken.isEmpty || refreshToken.isEmpty || user['id'] == null) {
+        state = const AuthState.error('Invalid account creation response.');
+        return false;
+      }
+
+      await _secureStorage.setAccessToken(accessToken);
+      await _secureStorage.setRefreshToken(refreshToken);
+      await _secureStorage.setUserId(user['id'].toString());
+      await _localStorage.setFirstLaunchComplete();
+      await _localStorage.setOnboardingComplete();
+
+      _pendingProfileContext = null;
+      state = const AuthState.authenticated();
+      return true;
+    } on DioException catch (e) {
+      state = AuthState.error(
+        _extractApiErrorMessage(
+          e.response?.data,
+          fallback: 'Unable to create account',
+        ),
+      );
+      return false;
+    } catch (e) {
+      state = AuthState.error(e.toString());
+      return false;
+    }
   }
 
   Future<bool> verifyOtp(String phone, String otp) async {
@@ -374,6 +477,8 @@ sealed class AuthState {
   const factory AuthState.unauthenticated({required bool showOnboarding}) =
       AuthStateUnauthenticated;
   const factory AuthState.needsOnboarding() = AuthStateNeedsOnboarding;
+  const factory AuthState.needsProfileCreation(PendingProfileContext context) =
+      AuthStateNeedsProfileCreation;
   const factory AuthState.otpSent(String phone) = AuthStateOtpSent;
   const factory AuthState.error(String message) = AuthStateError;
 }
@@ -397,6 +502,11 @@ class AuthStateUnauthenticated extends AuthState {
 
 class AuthStateNeedsOnboarding extends AuthState {
   const AuthStateNeedsOnboarding();
+}
+
+class AuthStateNeedsProfileCreation extends AuthState {
+  final PendingProfileContext context;
+  const AuthStateNeedsProfileCreation(this.context);
 }
 
 class AuthStateOtpSent extends AuthState {

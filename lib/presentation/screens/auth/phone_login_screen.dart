@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -45,20 +44,27 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
     });
 
     try {
-      final started = await ref.read(authStateProvider.notifier).startAkedlyOtp(_phoneController.text);
+      final normalizedPhone = '+20${_phoneController.text}';
+      final started = await ref
+          .read(authStateProvider.notifier)
+          .startAkedlyOtp(normalizedPhone);
 
       if (!mounted) return;
 
-      final callback = await Navigator.of(context).push<AkedlyAuthCallbackResult>(
-        MaterialPageRoute(
-          builder: (_) => AkedlyAuthWebViewScreen(iframeUrl: started.iframeUrl),
-        ),
-      );
+      final callback = await Navigator.of(context)
+          .push<AkedlyAuthCallbackResult>(
+            MaterialPageRoute(
+              builder: (_) =>
+                  AkedlyAuthWebViewScreen(iframeUrl: started.iframeUrl),
+            ),
+          );
 
       if (!mounted) return;
 
       final result = callback ?? AkedlyAuthCallbackResult.cancelled;
-      final completed = await ref.read(authStateProvider.notifier).completeAkedlySession(
+      final completed = await ref
+          .read(authStateProvider.notifier)
+          .completeAkedlySession(
             status: result.status,
             attemptId: result.attemptId ?? started.attemptId,
             transactionId: result.transactionId,
@@ -76,8 +82,8 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
         }
 
         final authState = ref.read(authStateProvider);
-        if (authState is AuthStateNeedsOnboarding) {
-          context.go(Routes.profileSetup);
+        if (authState is AuthStateNeedsProfileCreation) {
+          context.go(Routes.createProfile);
         } else if (authState is AuthStateAuthenticated) {
           context.go(Routes.home);
         }
@@ -86,35 +92,6 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
       setState(() {
         _errorText = e.toString().replaceFirst('Exception: ', '');
       });
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _socialLogin(SocialProvider provider) async {
-    setState(() => _isLoading = true);
-    try {
-      await ref.read(authStateProvider.notifier).socialLogin(provider);
-      if (mounted) {
-        final authState = ref.read(authStateProvider);
-        if (authState is AuthStateNeedsOnboarding) {
-          context.go(Routes.profileSetup);
-        } else if (authState is AuthStateAuthenticated) {
-          context.go(Routes.home);
-        } else if (authState is AuthStateError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Login failed: ${authState.message}')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Login failed: $e')));
-      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -232,18 +209,12 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                'Welcome to',
-                style: AppTextStyles.h4.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              Text(
-                AppConstants.appName,
-                style: AppTextStyles.h1.copyWith(color: AppColors.primary),
+                'Welcome to SmartApp',
+                style: AppTextStyles.h3.copyWith(color: AppColors.primary),
               ),
               const SizedBox(height: 8),
               Text(
-                'Your daily nutrition companion',
+                'Order healthy meals tailored to your mood',
                 style: AppTextStyles.bodyMedium.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -267,39 +238,15 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                 width: double.infinity,
                 gradient: _isValidPhone ? AppColors.primaryGradient : null,
               ),
-              const SizedBox(height: 36),
-              Row(
-                children: [
-                  Expanded(child: Divider(color: AppColors.divider)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(
-                      'or continue with',
-                      style: AppTextStyles.bodySmall,
-                    ),
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  "Don't have an account? Continue to create one.",
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: AppColors.textSecondary,
                   ),
-                  Expanded(child: Divider(color: AppColors.divider)),
-                ],
-              ),
-              const SizedBox(height: 28),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _SocialButton(
-                    icon: Icons.g_mobiledata,
-                    label: 'Google',
-                    onPressed: () => _socialLogin(SocialProvider.google),
-                  ),
-                  if (Platform.isIOS) ...[
-                    const SizedBox(width: 16),
-                    _SocialButton(
-                      icon: Icons.apple_rounded,
-                      label: 'Apple',
-                      color: AppColors.textPrimary,
-                      onPressed: () => _socialLogin(SocialProvider.apple),
-                    ),
-                  ],
-                ],
+                  textAlign: TextAlign.center,
+                ),
               ),
               const SizedBox(height: 52),
               Center(
@@ -331,37 +278,6 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _SocialButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color? color;
-  final VoidCallback onPressed;
-
-  const _SocialButton({
-    required this.icon,
-    required this.label,
-    this.color,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          border: Border.all(color: AppColors.divider),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Icon(icon, size: 28, color: color ?? AppColors.textPrimary),
       ),
     );
   }

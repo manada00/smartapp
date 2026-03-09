@@ -45,6 +45,7 @@ const { initCrashReporter, captureException } = require('./services/system/crash
 // Routes
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/user');
+const usersRoutes = require('./routes/users');
 const foodRoutes = require('./routes/food');
 const orderRoutes = require('./routes/orders');
 const subscriptionRoutes = require('./routes/subscriptions');
@@ -120,6 +121,7 @@ app.set('io', io);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/v1/user', userRoutes);
+app.use('/api/v1/users', usersRoutes);
 app.use('/api/v1/food', foodRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/subscriptions', subscriptionRoutes);
@@ -132,6 +134,7 @@ app.use('/api/admin', adminRoutes);
 // Alias routes for future provider integrations
 app.use('/auth', authRoutes);
 app.use('/user', userRoutes);
+app.use('/users', usersRoutes);
 app.use('/food', foodRoutes);
 app.use('/orders', orderRoutes);
 app.use('/subscriptions', subscriptionRoutes);

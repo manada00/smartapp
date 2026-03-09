@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { apiRequest } from '@/lib/api';
 import { AkedlyWidgetModal } from '@/components/auth/akedly-widget-modal';
@@ -22,9 +21,14 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
+      const digitsOnly = phone.replace(/\D/g, '');
+      const normalizedPhone = digitsOnly.startsWith('20')
+        ? `+${digitsOnly}`
+        : `+20${digitsOnly}`;
+
       const response = await apiRequest<StartOtpResponse>('/auth/otp/start', {
         method: 'POST',
-        body: { phoneNumber: phone },
+        body: { phoneNumber: normalizedPhone },
       });
 
       setIframeUrl(response.iframeUrl);
@@ -43,8 +47,8 @@ export default function LoginPage() {
     <section className="login-page">
       <div className="login-overlay" />
       <div className="login-card">
-        <h1>Welcome Back</h1>
-        <p className="muted">Your smart choices start here</p>
+        <h1>Welcome to SmartApp</h1>
+        <p className="muted">Order healthy meals tailored to your mood</p>
         <div className="login-form">
           <input
             placeholder="Egypt phone number (10 digits)"
@@ -53,10 +57,10 @@ export default function LoginPage() {
           />
           {error ? <p className="login-error">{error}</p> : null}
           <button className="btn login-btn" onClick={startOtpLogin} disabled={loading || !canStart}>
-            {loading ? 'Starting...' : 'Login with Phone'}
+            {loading ? 'Starting...' : 'Continue'}
           </button>
         </div>
-        <p className="muted">New user? <Link href="/signup">Create account</Link></p>
+        <p className="muted">Don&apos;t have an account? Continue to create one.</p>
       </div>
       <AkedlyWidgetModal
         open={widgetOpen}

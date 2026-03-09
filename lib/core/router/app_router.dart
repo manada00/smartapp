@@ -5,6 +5,7 @@ import '../../presentation/screens/splash/splash_screen.dart';
 import '../../presentation/screens/onboarding/onboarding_screen.dart';
 import '../../presentation/screens/auth/phone_login_screen.dart';
 import '../../presentation/screens/auth/otp_verification_screen.dart';
+import '../../presentation/screens/auth/create_profile_screen.dart';
 import '../../presentation/screens/profile_setup/profile_setup_screen.dart';
 import '../../presentation/screens/profile_setup/health_goals_screen.dart';
 import '../../presentation/screens/profile_setup/dietary_preferences_screen.dart';
@@ -63,6 +64,10 @@ class AppRouter {
           final phone = state.extra as String? ?? '';
           return OtpVerificationScreen(phoneNumber: phone);
         },
+      ),
+      GoRoute(
+        path: Routes.createProfile,
+        builder: (context, state) => const CreateProfileScreen(),
       ),
       GoRoute(
         path: Routes.profileSetup,
@@ -220,6 +225,7 @@ class Routes {
   static const onboarding = '/onboarding';
   static const phoneLogin = '/login';
   static const otpVerification = '/otp';
+  static const createProfile = '/create-profile';
   static const profileSetup = '/setup/profile';
   static const healthGoals = '/setup/goals';
   static const dietaryPreferences = '/setup/preferences';

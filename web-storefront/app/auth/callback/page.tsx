@@ -11,6 +11,10 @@ type SessionResponse = {
   data?: {
     accessToken: string;
     refreshToken: string;
+    isNewUser?: boolean;
+    phoneNumber?: string;
+    attemptId?: string;
+    transactionId?: string;
   };
 };
 
@@ -70,6 +74,19 @@ export default function AuthCallbackPage() {
           if (session.data?.accessToken && session.data?.refreshToken) {
             storage.setTokens(session.data.accessToken, session.data.refreshToken);
             window.location.replace('/meals');
+            return;
+          }
+
+          if (session.data?.isNewUser) {
+            const signupParams = new URLSearchParams();
+            if (session.data.phoneNumber) signupParams.set('phoneNumber', session.data.phoneNumber);
+            if (session.data.attemptId || attemptId) {
+              signupParams.set('attemptId', session.data.attemptId || attemptId);
+            }
+            if (session.data.transactionId || transactionId) {
+              signupParams.set('transactionId', session.data.transactionId || transactionId);
+            }
+            window.location.replace(`/signup?${signupParams.toString()}`);
             return;
           }
         } catch (error) {
