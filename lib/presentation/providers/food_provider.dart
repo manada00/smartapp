@@ -5,18 +5,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_constants.dart';
 import '../../core/network/dio_client.dart';
+import '../../core/storage/local_storage.dart';
 import '../../data/mock/mock_drinks_sweets.dart';
 import '../../data/models/food_model.dart';
 import 'auth_provider.dart';
 
 final categoriesProvider =
-    StateNotifierProvider<CategoriesNotifier, AsyncValue<List<CategoryModel>>>(
-      (ref) {
-        return CategoriesNotifier(ref.watch(dioClientProvider));
-      },
-    );
+    StateNotifierProvider<CategoriesNotifier, AsyncValue<List<CategoryModel>>>((
+      ref,
+    ) {
+      return CategoriesNotifier(ref.watch(dioClientProvider));
+    });
 
-class CategoriesNotifier extends StateNotifier<AsyncValue<List<CategoryModel>>> {
+class CategoriesNotifier
+    extends StateNotifier<AsyncValue<List<CategoryModel>>> {
   CategoriesNotifier(this._dioClient) : super(const AsyncValue.loading()) {
     loadCategories();
     _refreshTimer = Timer.periodic(
@@ -26,6 +28,7 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<CategoryModel>>> 
   }
 
   final DioClient _dioClient;
+  final LocalStorage _localStorage = LocalStorage();
   Timer? _refreshTimer;
 
   Future<void> loadCategories({bool silent = false}) async {
@@ -34,12 +37,31 @@ class CategoriesNotifier extends StateNotifier<AsyncValue<List<CategoryModel>>> 
     }
     try {
       final response = await _dioClient.get(ApiConstants.categories);
-      final list = (response.data['data'] as List<dynamic>? ?? [])
+      final raw = (response.data['data'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      final list = raw
           .whereType<Map<String, dynamic>>()
           .map(_mapCategory)
           .toList();
+      await _localStorage.cacheData(StorageKeys.cachedCategories, raw);
       state = AsyncValue.data([...list, ...drinksAndSweetsMockCategories()]);
     } on DioException catch (e, st) {
+      final cached = _localStorage.getCachedData<dynamic>(
+        StorageKeys.cachedCategories,
+      );
+      if (cached is List) {
+        final cachedList = cached
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .map(_mapCategory)
+            .toList();
+        state = AsyncValue.data([
+          ...cachedList,
+          ...drinksAndSweetsMockCategories(),
+        ]);
+        return;
+      }
       state = AsyncValue.error(ApiException.fromDioException(e), st);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -72,6 +94,7 @@ class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
   }
 
   final DioClient _dioClient;
+  final LocalStorage _localStorage = LocalStorage();
   final String? _categoryId;
   Timer? _refreshTimer;
 
@@ -89,12 +112,31 @@ class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
         },
       );
 
-      final foods = (response.data['data'] as List<dynamic>? ?? [])
+      final raw = (response.data['data'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .toList();
+      final foods = raw
           .whereType<Map<String, dynamic>>()
           .map(_mapFood)
           .toList();
+      final cacheKey = '${StorageKeys.cachedFoodMenu}:${categoryId ?? 'all'}';
+      await _localStorage.cacheData(cacheKey, raw);
       state = AsyncValue.data([...foods, ..._mockFoodsForCategory(categoryId)]);
     } on DioException catch (e, st) {
+      final cacheKey = '${StorageKeys.cachedFoodMenu}:${categoryId ?? 'all'}';
+      final cached = _localStorage.getCachedData<dynamic>(cacheKey);
+      if (cached is List) {
+        final cachedFoods = cached
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .map(_mapFood)
+            .toList();
+        state = AsyncValue.data([
+          ...cachedFoods,
+          ..._mockFoodsForCategory(categoryId),
+        ]);
+        return;
+      }
       state = AsyncValue.error(ApiException.fromDioException(e), st);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -107,6 +149,7 @@ class FoodsNotifier extends StateNotifier<AsyncValue<List<FoodModel>>> {
     super.dispose();
   }
 }
+
 final foodDetailProvider = FutureProvider.family<FoodModel, String>((
   ref,
   foodId,

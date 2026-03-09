@@ -18,7 +18,7 @@ const navItems = [
   { href: '/support', label: 'Support', icon: Ticket },
   { href: '/website', label: 'Website', icon: Globe },
   { href: '/settings', label: 'Settings', icon: Settings },
-  { href: '/admin/system', label: 'System Health', icon: Activity },
+  { href: '/admin/monitoring', label: 'Monitoring', icon: Activity },
 ];
 
 export function AdminShell({ role, children }: { role: AdminRole; children: ReactNode }) {

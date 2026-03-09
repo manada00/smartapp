@@ -33,6 +33,17 @@ const protect = async (req, res, next) => {
       });
     }
 
+    const staleActiveAt = !user.lastActiveAt
+      || (Date.now() - new Date(user.lastActiveAt).getTime()) > (5 * 60 * 1000);
+
+    if (staleActiveAt) {
+      void User.updateOne(
+        { _id: user._id },
+        { $set: { lastActiveAt: new Date() } },
+      ).catch(() => {});
+      user.lastActiveAt = new Date();
+    }
+
     req.user = user;
     next();
   } catch (error) {

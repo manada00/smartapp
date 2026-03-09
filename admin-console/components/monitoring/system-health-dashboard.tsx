@@ -40,14 +40,27 @@ type SystemLog = {
   service: string;
   level: 'error' | 'warning' | 'info';
   message: string;
+  requestPath?: string;
 };
 
-type SystemAlert = {
+type RecentError = {
   _id: string;
   timestamp: string;
   service: string;
-  severity: 'warning' | 'critical';
+  level: 'error' | 'warning' | 'info';
   message: string;
+  requestPath?: string;
+};
+
+type MetricsSummary = {
+  dailyRevenue: number;
+  ordersToday: number;
+  newUsers: number;
+  activeUsers: number;
+  revenueOverTime: Array<{ date: string; revenue: number }>;
+  ordersPerHour: Array<{ hour: number; count: number }>;
+  activeUsersTrend: Array<{ timestamp: string; activeUsers: number }>;
+  recentErrors: RecentError[];
 };
 
 function TinyChart({ values, color }: { values: number[]; color: string }) {
@@ -71,8 +84,8 @@ function TinyChart({ values, color }: { values: number[]; color: string }) {
 export function SystemHealthDashboard() {
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [metrics, setMetrics] = useState<MetricPoint[]>([]);
+  const [summary, setSummary] = useState<MetricsSummary | null>(null);
   const [logs, setLogs] = useState<SystemLog[]>([]);
-  const [alerts, setAlerts] = useState<SystemAlert[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,18 +93,18 @@ export function SystemHealthDashboard() {
 
     const load = async () => {
       try {
-        const [healthRes, metricsRes, logsRes, alertsRes] = await Promise.all([
+        const [healthRes, metricsRes, summaryRes, logsRes] = await Promise.all([
           fetch('/api/admin/system-health'),
           fetch('/api/admin/system-metrics?minutes=180'),
+          fetch('/api/admin/metrics'),
           fetch('/api/admin/logs'),
-          fetch('/api/admin/system-alerts'),
         ]);
 
-        const [healthBody, metricsBody, logsBody, alertsBody] = await Promise.all([
+        const [healthBody, metricsBody, summaryBody, logsBody] = await Promise.all([
           healthRes.json(),
           metricsRes.json(),
+          summaryRes.json(),
           logsRes.json(),
-          alertsRes.json(),
         ]);
 
         if (!active) return;
@@ -104,8 +117,8 @@ export function SystemHealthDashboard() {
         setError(null);
         setHealth(healthBody.data as HealthPayload);
         setMetrics(Array.isArray(metricsBody?.data) ? metricsBody.data as MetricPoint[] : []);
+        setSummary(summaryBody?.success ? summaryBody.data as MetricsSummary : null);
         setLogs(Array.isArray(logsBody?.data) ? logsBody.data as SystemLog[] : []);
-        setAlerts(Array.isArray(alertsBody?.data) ? alertsBody.data as SystemAlert[] : []);
       } catch (requestError) {
         if (!active) return;
         setError(requestError instanceof Error ? requestError.message : 'Failed to load dashboard');
@@ -122,12 +135,14 @@ export function SystemHealthDashboard() {
   }, []);
 
   const metricSeries = useMemo(() => ({
-    activeUsers: metrics.map((point) => Number(point.activeUsers || 0)).slice(-30),
+    activeUsers: (summary?.activeUsersTrend || []).map((point) => Number(point.activeUsers || 0)).slice(-30),
+    revenueOverTime: (summary?.revenueOverTime || []).map((point) => Number(point.revenue || 0)).slice(-30),
+    ordersPerHour: (summary?.ordersPerHour || []).map((point) => Number(point.count || 0)).slice(-24),
     requestRate: metrics.map((point) => Number(point.requestCount || 0)).slice(-30),
     errorRate: metrics.map((point) => Number(point.errorRate || 0)).slice(-30),
     memoryMb: metrics.map((point) => Number(((point.memoryUsage?.heapUsed || 0) / (1024 * 1024)).toFixed(2))).slice(-30),
     cpuUsage: metrics.map((point) => Number(point.cpuUsage || 0)).slice(-30),
-  }), [metrics]);
+  }), [metrics, summary]);
 
   const serviceCards = useMemo(() => {
     const dynamicServices = (health?.services || []).map((service) => ({
@@ -172,40 +187,40 @@ export function SystemHealthDashboard() {
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
-        <Card><h3>Active Users</h3><p>{health?.activeUsers.activeUsers || 0}</p><p className="muted">Mobile: {health?.activeUsers.mobileUsers || 0} · Web: {health?.activeUsers.webUsers || 0}</p></Card>
-        <Card><h3>Requests / min</h3><p>{health?.requestMetrics.requestCount || 0}</p></Card>
-        <Card><h3>Error Rate</h3><p>{health?.requestMetrics.errorRate || 0}%</p></Card>
-        <Card><h3>API Runtime</h3><p>{health ? `${Math.floor(health.api.uptime / 60)} min` : 'n/a'}</p><p className="muted">Node {health?.api.nodeVersion || '-'}</p></Card>
+        <Card><h3>Daily Revenue</h3><p>EGP {Number(summary?.dailyRevenue || 0).toFixed(2)}</p></Card>
+        <Card><h3>Orders Today</h3><p>{summary?.ordersToday || 0}</p></Card>
+        <Card><h3>New Users</h3><p>{summary?.newUsers || 0}</p></Card>
+        <Card><h3>Active Users</h3><p>{summary?.activeUsers || 0}</p></Card>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <Card><h3>Active Users</h3><TinyChart values={metricSeries.activeUsers} color="#22c55e" /></Card>
-        <Card><h3>API Requests per Minute</h3><TinyChart values={metricSeries.requestRate} color="#3b82f6" /></Card>
-        <Card><h3>Error Rate (%)</h3><TinyChart values={metricSeries.errorRate} color="#ef4444" /></Card>
-        <Card><h3>Memory Usage (MB)</h3><TinyChart values={metricSeries.memoryMb} color="#f59e0b" /></Card>
-        <Card><h3>CPU Usage (%)</h3><TinyChart values={metricSeries.cpuUsage} color="#8b5cf6" /></Card>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+        <Card><h3>Revenue over time</h3><TinyChart values={metricSeries.revenueOverTime} color="#22c55e" /></Card>
+        <Card><h3>Orders per hour</h3><TinyChart values={metricSeries.ordersPerHour} color="#3b82f6" /></Card>
+        <Card><h3>Active users trend</h3><TinyChart values={metricSeries.activeUsers} color="#8b5cf6" /></Card>
       </div>
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <Card>
-          <h3>Active Alerts</h3>
+          <h3>Recent Errors</h3>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
                   <th>Time</th>
                   <th>Service</th>
-                  <th>Severity</th>
+                  <th>Level</th>
+                  <th>Path</th>
                   <th>Message</th>
                 </tr>
               </thead>
               <tbody>
-                {alerts.slice(0, 20).map((alert) => (
-                  <tr key={alert._id}>
-                    <td>{new Date(alert.timestamp).toLocaleTimeString()}</td>
-                    <td>{alert.service}</td>
-                    <td><Badge tone={alert.severity === 'critical' ? 'danger' : 'warning'}>{alert.severity}</Badge></td>
-                    <td>{alert.message}</td>
+                {(summary?.recentErrors || []).slice(0, 20).map((item) => (
+                  <tr key={item._id}>
+                    <td>{new Date(item.timestamp).toLocaleTimeString()}</td>
+                    <td>{item.service}</td>
+                    <td><Badge tone={item.level === 'error' ? 'danger' : item.level === 'warning' ? 'warning' : 'neutral'}>{item.level}</Badge></td>
+                    <td>{item.requestPath || '-'}</td>
+                    <td>{item.message}</td>
                   </tr>
                 ))}
               </tbody>

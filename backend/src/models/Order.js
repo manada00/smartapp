@@ -11,6 +11,11 @@ const orderSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+  },
   user_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -175,6 +180,14 @@ orderSchema.pre('validate', async function(next) {
     this.user_id = this.user;
   }
 
+  if (!this.userId && (this.user || this.user_id)) {
+    this.userId = this.user || this.user_id;
+  }
+
+  if (!this.user && (this.userId || this.user_id)) {
+    this.user = this.userId || this.user_id;
+  }
+
   if (!this.user && this.user_id) {
     this.user = this.user_id;
   }
@@ -215,5 +228,9 @@ orderSchema.pre('validate', async function(next) {
 orderSchema.index({ user_id: 1, created_at: -1 });
 orderSchema.index({ payment_status: 1 });
 orderSchema.index({ created_at: -1 });
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ userId: 1 });
+orderSchema.index({ status: 1 });
+orderSchema.index({ paymentStatus: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

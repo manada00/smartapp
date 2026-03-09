@@ -4,6 +4,7 @@ const User = require('../models/User');
 const Address = require('../models/Address');
 const AppConfig = require('../models/AppConfig');
 const SupportTicket = require('../models/SupportTicket');
+const Order = require('../models/Order');
 const { protect } = require('../middleware/auth');
 
 const router = express.Router();
@@ -26,9 +27,49 @@ const getOrCreateAppConfig = async () => {
 // Get profile
 router.get('/profile', protect, async (req, res) => {
   try {
+    const [addresses, recentOrders, orderSummary] = await Promise.all([
+      Address.find({ user: req.user._id }).sort({ updatedAt: -1 }),
+      Order.find({ user: req.user._id })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select('orderNumber status paymentStatus total createdAt'),
+      Order.aggregate([
+        { $match: { user: req.user._id } },
+        {
+          $group: {
+            _id: null,
+            totalOrders: { $sum: 1 },
+            totalSpent: { $sum: '$total' },
+            lastOrderAt: { $max: '$createdAt' },
+          },
+        },
+      ]),
+    ]);
+
+    const summary = orderSummary[0] || {
+      totalOrders: 0,
+      totalSpent: 0,
+      lastOrderAt: null,
+    };
+
     res.json({
       success: true,
-      data: req.user,
+      data: {
+        ...req.user.toObject(),
+        phoneNumber: req.user.phoneNumber || req.user.phone || '',
+        favorites: Array.isArray(req.user.favorites)
+          ? req.user.favorites.map((id) => String(id))
+          : [],
+        addresses,
+        orderHistory: {
+          summary: {
+            totalOrders: Number(summary.totalOrders || 0),
+            totalSpent: Number(summary.totalSpent || 0),
+            lastOrderAt: summary.lastOrderAt,
+          },
+          recent: recentOrders,
+        },
+      },
     });
   } catch (error) {
     res.status(500).json({
@@ -41,13 +82,32 @@ router.get('/profile', protect, async (req, res) => {
 // Update profile
 router.put('/profile', protect, async (req, res) => {
   try {
-    const { name, email, dateOfBirth, gender, profileImage } = req.body;
+    const {
+      name,
+      email,
+      phoneNumber,
+      dateOfBirth,
+      gender,
+      profileImage,
+      favorites,
+    } = req.body;
 
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      { name, email, dateOfBirth, gender, profileImage },
-      { new: true }
-    );
+    const update = {};
+
+    if (typeof name === 'string') update.name = name.trim();
+    if (typeof email === 'string') update.email = email.trim().toLowerCase();
+    if (typeof phoneNumber === 'string') {
+      update.phoneNumber = phoneNumber.trim();
+      update.phone = phoneNumber.trim();
+    }
+    if (dateOfBirth !== undefined) update.dateOfBirth = dateOfBirth;
+    if (typeof gender === 'string') update.gender = gender;
+    if (typeof profileImage === 'string') update.profileImage = profileImage.trim();
+    if (Array.isArray(favorites)) {
+      update.favorites = favorites.map((item) => String(item)).filter(Boolean);
+    }
+
+    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true });
 
     res.json({
       success: true,

@@ -7,8 +7,16 @@ const toStack = (value) => {
   return String(value);
 };
 
-const logSystemEvent = async ({ level = 'info', service = 'api', message, stackTrace }) => {
+const logSystemEvent = async ({
+  level = 'info',
+  service = 'api',
+  message,
+  stackTrace,
+  requestPath,
+}) => {
   if (!message) return;
+
+  const normalizedStack = toStack(stackTrace);
 
   try {
     if (mongoose.connection.readyState !== 1) {
@@ -21,7 +29,9 @@ const logSystemEvent = async ({ level = 'info', service = 'api', message, stackT
       level,
       service,
       message: String(message),
-      stackTrace: toStack(stackTrace),
+      requestPath: requestPath ? String(requestPath) : undefined,
+      stack: normalizedStack,
+      stackTrace: normalizedStack,
     });
   } catch (error) {
     console.error(`[system-logger] ${error.message}`);

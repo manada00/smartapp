@@ -1,5 +1,5 @@
-import { SystemHealthDashboard } from '@/components/monitoring/system-health-dashboard';
+import { redirect } from 'next/navigation';
 
 export default function AdminSystemPage() {
-  return <SystemHealthDashboard />;
+  redirect('/admin/monitoring');
 }

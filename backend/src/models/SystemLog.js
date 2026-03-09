@@ -21,6 +21,8 @@ const systemLogSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  requestPath: String,
+  stack: String,
   stackTrace: String,
 }, {
   timestamps: true,

@@ -161,6 +161,10 @@ class StorageKeys {
   static const String cartItems = 'cart_items';
   static const String recentSearches = 'recent_searches';
   static const String selectedAddress = 'selected_address';
+  static const String cachedCategories = 'cached_categories';
+  static const String cachedFoodMenu = 'cached_food_menu';
+  static const String cachedRecentOrders = 'cached_recent_orders';
+  static const String cachedUserProfile = 'cached_user_profile';
   static const String themeMode = 'theme_mode';
   static const String notificationsEnabled = 'notifications_enabled';
   static const String appLanguage = 'app_language';

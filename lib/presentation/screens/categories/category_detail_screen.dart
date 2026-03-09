@@ -4,8 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../../data/models/food_model.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/localization/l10n_extensions.dart';
 import '../../../core/router/app_router.dart';
 import '../../providers/food_provider.dart';
+import '../../widgets/common/app_text_field.dart';
+import '../../widgets/common/empty_state_widget.dart';
 import '../../widgets/common/loading_widget.dart';
 import '../../widgets/food/food_card.dart';
 
@@ -26,6 +29,9 @@ class CategoryDetailScreen extends ConsumerStatefulWidget {
 
 class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
   String _sortBy = 'Recommended';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
 
   static const _sortOptions = [
     'Recommended',
@@ -33,6 +39,31 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
     'Price High-Low',
     'Rating',
   ];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  bool _matchesFood(BuildContext context, FoodModel food) {
+    if (_searchQuery.isEmpty) return true;
+
+    final query = _searchQuery;
+    return food.name.toLowerCase().contains(query) ||
+        food.name.localize(context).toLowerCase().contains(query) ||
+        food.description.toLowerCase().contains(query) ||
+        food.description.localize(context).toLowerCase().contains(query);
+  }
+
+  List<FoodModel> _buildSuggestions(
+    BuildContext context,
+    List<FoodModel> foods,
+  ) {
+    if (_searchQuery.isEmpty) return [];
+    return foods.where((food) => _matchesFood(context, food)).take(8).toList();
+  }
 
   List<FoodModel> _sortedFoods(List<FoodModel> foods) {
     final sorted = List<FoodModel>.from(foods);
@@ -50,8 +81,9 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       case 'Recommended':
       default:
         sorted.sort((a, b) {
-          final featuredComparison =
-              (b.isFeatured ? 1 : 0).compareTo(a.isFeatured ? 1 : 0);
+          final featuredComparison = (b.isFeatured ? 1 : 0).compareTo(
+            a.isFeatured ? 1 : 0,
+          );
           if (featuredComparison != 0) return featuredComparison;
 
           final ratingComparison = b.rating.compareTo(a.rating);
@@ -82,6 +114,17 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+            child: SearchTextField(
+              controller: _searchController,
+              focusNode: _searchFocusNode,
+              hint: 'Search for meals...',
+              onChanged: (query) {
+                setState(() => _searchQuery = query.trim().toLowerCase());
+              },
+            ),
+          ),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             child: Row(
@@ -110,22 +153,74 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
           Expanded(
             child: foodsAsync.when(
               data: (foods) {
-                final sortedFoods = _sortedFoods(foods);
+                final matchedFoods = foods
+                    .where((food) => _matchesFood(context, food))
+                    .toList();
+                final sortedFoods = _sortedFoods(matchedFoods);
+                final suggestions = _buildSuggestions(context, foods);
 
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  itemCount: sortedFoods.length,
-                  itemBuilder: (context, index) {
-                    final food = sortedFoods[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: FoodCard(
-                        food: food,
-                        onTap: () =>
-                            context.push('${Routes.foodDetail}/${food.id}'),
+                if (sortedFoods.isEmpty) {
+                  return EmptyStateWidget.search();
+                }
+
+                return Column(
+                  children: [
+                    if (suggestions.isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: AppColors.cardShadow,
+                        ),
+                        child: Column(
+                          children: suggestions.map((food) {
+                            return ListTile(
+                              dense: true,
+                              leading: const Icon(
+                                Icons.restaurant_menu_rounded,
+                                color: AppColors.primary,
+                              ),
+                              title: Text(food.name.localize(context)),
+                              subtitle: Text(
+                                food.categoryName.localize(context),
+                              ),
+                              onTap: () {
+                                _searchController.text = food.name;
+                                _searchController.selection =
+                                    TextSelection.fromPosition(
+                                      TextPosition(
+                                        offset: _searchController.text.length,
+                                      ),
+                                    );
+                                setState(() {
+                                  _searchQuery = food.name.toLowerCase();
+                                });
+                                _searchFocusNode.unfocus();
+                              },
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    );
-                  },
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        itemCount: sortedFoods.length,
+                        itemBuilder: (context, index) {
+                          final food = sortedFoods[index];
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: FoodCard(
+                              food: food,
+                              onTap: () => context.push(
+                                '${Routes.foodDetail}/${food.id}',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 );
               },
               loading: () => const LoadingWidget(),

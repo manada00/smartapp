@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function MonitoringPage() {
-  redirect('/admin/system');
+  redirect('/admin/monitoring');
 }

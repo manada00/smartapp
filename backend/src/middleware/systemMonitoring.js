@@ -1,5 +1,6 @@
 const { registerRequest, registerError } = require('../services/system/runtimeState');
 const { logSystemEvent } = require('../services/system/systemLogger');
+const { captureException } = require('../services/system/crashReporter');
 
 const resolveService = (path) => {
   if (String(path).includes('/webhooks')) return 'webhook';
@@ -17,6 +18,7 @@ const trackRequestMetrics = (req, res, next) => {
         level: 'error',
         service: resolveService(req.path),
         message: `${req.method} ${req.originalUrl} failed with status ${res.statusCode}`,
+        requestPath: req.originalUrl,
       });
     }
   });
@@ -32,6 +34,7 @@ const captureUnhandledErrors = () => {
       message: `Uncaught exception: ${error.message}`,
       stackTrace: error,
     });
+    captureException(error, { source: 'uncaughtException' });
   });
 
   process.on('unhandledRejection', (reason) => {
@@ -42,6 +45,7 @@ const captureUnhandledErrors = () => {
       message: `Unhandled rejection: ${error.message}`,
       stackTrace: error,
     });
+    captureException(error, { source: 'unhandledRejection' });
   });
 };
 

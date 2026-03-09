@@ -7,6 +7,10 @@ const userSchema = new mongoose.Schema({
     unique: true,
     sparse: true,
   },
+  phoneNumber: {
+    type: String,
+    sparse: true,
+  },
   firebaseUid: {
     type: String,
     unique: true,
@@ -72,9 +76,33 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  favorites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Food',
+  }],
+  lastActiveAt: {
+    type: Date,
+    index: true,
+  },
 }, {
   timestamps: true,
 });
+
+userSchema.pre('validate', function(next) {
+  if (!this.phoneNumber && this.phone) {
+    this.phoneNumber = this.phone;
+  }
+
+  if (!this.phone && this.phoneNumber) {
+    this.phone = this.phoneNumber;
+  }
+
+  next();
+});
+
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
+userSchema.index({ phoneNumber: 1 });
+userSchema.index({ createdAt: -1 });
 
 userSchema.methods.addPoints = function(points) {
   this.loyaltyInfo.points += points;

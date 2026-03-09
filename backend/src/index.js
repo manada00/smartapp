@@ -39,6 +39,8 @@ const User = require('./models/User');
 const { trackRequestMetrics, captureUnhandledErrors } = require('./middleware/systemMonitoring');
 const { startMetricsCollector } = require('./services/system/metricsCollector');
 const { logSystemEvent } = require('./services/system/systemLogger');
+const { ensureDatabaseIndexes } = require('./services/system/indexManager');
+const { initCrashReporter, captureException } = require('./services/system/crashReporter');
 
 // Routes
 const authRoutes = require('./routes/auth');
@@ -78,6 +80,7 @@ const corsOptions = {
 
 const app = express();
 const server = http.createServer(app);
+initCrashReporter();
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -187,11 +190,13 @@ app.set('emitOrderUpdate', emitOrderUpdate);
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
+  captureException(err, { requestPath: req.originalUrl });
   void logSystemEvent({
     level: 'error',
     service: req.path.includes('/webhooks') ? 'webhook' : 'backend_api',
     message: err.message || 'Unhandled API error',
     stackTrace: err,
+    requestPath: req.originalUrl,
   });
   res.status(500).json({
     success: false,
@@ -218,12 +223,16 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 
 captureUnhandledErrors();
 
-if (!process.env.VERCEL) {
-  initialConnection
-    .then(() => {
+initialConnection
+  .then(() => {
+    void ensureDatabaseIndexes().catch((error) => {
+      console.error(`Index synchronization failed: ${error.message}`);
+    });
+
+    if (!process.env.VERCEL) {
       startMetricsCollector();
-    })
-    .catch(() => {});
-}
+    }
+  })
+  .catch(() => {});
 
 module.exports = app;

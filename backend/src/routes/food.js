@@ -3,6 +3,7 @@ const Food = require('../models/Food');
 const Category = require('../models/Category');
 const AppConfig = require('../models/AppConfig');
 const { protect } = require('../middleware/auth');
+const cache = require('../services/cache/cacheService');
 
 const router = express.Router();
 
@@ -35,30 +36,45 @@ const getOrCreateAppConfig = async () => {
   return config;
 };
 
+const cacheGetOrSet = async (key, ttlSeconds, resolver) => {
+  const cached = await cache.get(key);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const fresh = await resolver();
+  await cache.set(key, fresh, ttlSeconds);
+  return fresh;
+};
+
 // Get categories
 router.get('/categories', async (req, res) => {
   try {
-    const categories = await Category.aggregate([
-      { $match: { isActive: true } },
-      {
-        $lookup: {
-          from: 'foods',
-          localField: '_id',
-          foreignField: 'category',
-          as: 'foods',
+    const categories = await cacheGetOrSet(
+      'food:categories',
+      10 * 60,
+      async () => Category.aggregate([
+        { $match: { isActive: true } },
+        {
+          $lookup: {
+            from: 'foods',
+            localField: '_id',
+            foreignField: 'category',
+            as: 'foods',
+          },
         },
-      },
-      {
-        $project: {
-          name: 1,
-          description: 1,
-          image: 1,
-          sortOrder: 1,
-          itemCount: { $size: '$foods' },
+        {
+          $project: {
+            name: 1,
+            description: 1,
+            image: 1,
+            sortOrder: 1,
+            itemCount: { $size: '$foods' },
+          },
         },
-      },
-      { $sort: { sortOrder: 1 } },
-    ]);
+        { $sort: { sortOrder: 1 } },
+      ]),
+    );
 
     res.json({
       success: true,
@@ -69,6 +85,44 @@ router.get('/categories', async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+});
+
+// Get menu (cached)
+router.get('/menu', async (req, res) => {
+  try {
+    const menu = await cacheGetOrSet(
+      'food:menu',
+      5 * 60,
+      async () => Food.find({ isAvailable: true })
+        .populate('category', 'name')
+        .sort({ sortOrder: 1, rating: -1, createdAt: -1 })
+        .limit(200)
+        .lean(),
+    );
+
+    return res.json({ success: true, data: menu });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get popular foods (cached)
+router.get('/popular', async (req, res) => {
+  try {
+    const popular = await cacheGetOrSet(
+      'food:popular',
+      5 * 60,
+      async () => Food.find({ isAvailable: true })
+        .populate('category', 'name')
+        .sort({ isFeatured: -1, rating: -1, reviewCount: -1, createdAt: -1 })
+        .limit(20)
+        .lean(),
+    );
+
+    return res.json({ success: true, data: popular });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 

@@ -82,28 +82,35 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final attemptId = (body['attemptId'] ?? '').toString().trim();
 
       if (body['success'] != true || iframeUrl.isEmpty || attemptId.isEmpty) {
-        throw Exception(_extractApiErrorMessage(body, fallback: 'Unable to start OTP verification'));
+        throw Exception(
+          _extractApiErrorMessage(
+            body,
+            fallback: 'Unable to start OTP verification',
+          ),
+        );
       }
 
       state = const AuthState.unauthenticated(showOnboarding: false);
 
-      return AkedlyOtpStartResponse(
-        iframeUrl: iframeUrl,
-        attemptId: attemptId,
-      );
+      return AkedlyOtpStartResponse(iframeUrl: iframeUrl, attemptId: attemptId);
     } on DioException catch (e) {
       final data = e.response?.data;
       final statusCode = e.response?.statusCode;
 
       final message = switch (statusCode) {
         429 => 'Too many OTP attempts. Please try again shortly.',
-        _ => _extractApiErrorMessage(data, fallback: 'Unable to start OTP verification'),
+        _ => _extractApiErrorMessage(
+          data,
+          fallback: 'Unable to start OTP verification',
+        ),
       };
 
       state = AuthState.error(message);
       rethrow;
     } catch (e) {
-      final message = e is Exception ? e.toString().replaceFirst('Exception: ', '') : e.toString();
+      final message = e is Exception
+          ? e.toString().replaceFirst('Exception: ', '')
+          : e.toString();
       state = AuthState.error(message);
       rethrow;
     }
@@ -122,7 +129,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
 
-    if ((attemptId == null || attemptId.isEmpty) && (transactionId == null || transactionId.isEmpty)) {
+    if ((attemptId == null || attemptId.isEmpty) &&
+        (transactionId == null || transactionId.isEmpty)) {
       state = AuthState.error('Missing OTP verification reference.');
       return false;
     }
@@ -134,8 +142,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
         final response = await _dioClient.get(
           ApiConstants.otpSession,
           queryParameters: {
-            if (attemptId != null && attemptId.isNotEmpty) 'attemptId': attemptId,
-            if (transactionId != null && transactionId.isNotEmpty) 'transactionId': transactionId,
+            if (attemptId != null && attemptId.isNotEmpty)
+              'attemptId': attemptId,
+            if (transactionId != null && transactionId.isNotEmpty)
+              'transactionId': transactionId,
           },
         );
 
@@ -146,12 +156,17 @@ class AuthNotifier extends StateNotifier<AuthState> {
         }
 
         if (body['failed'] == true) {
-          state = AuthState.error(_extractApiErrorMessage(body, fallback: 'OTP verification failed'));
+          state = AuthState.error(
+            _extractApiErrorMessage(body, fallback: 'OTP verification failed'),
+          );
           return false;
         }
 
         if (body['success'] != true) {
-          final message = _extractApiErrorMessage(body, fallback: 'OTP verification did not complete');
+          final message = _extractApiErrorMessage(
+            body,
+            fallback: 'OTP verification did not complete',
+          );
           state = AuthState.error(message);
           return false;
         }
@@ -194,7 +209,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
         final message = switch (statusCode) {
           429 => 'Too many verification requests. Please try again shortly.',
-          _ => _extractApiErrorMessage(e.response?.data, fallback: 'Unable to complete OTP verification'),
+          _ => _extractApiErrorMessage(
+            e.response?.data,
+            fallback: 'Unable to complete OTP verification',
+          ),
         };
 
         state = AuthState.error(message);
@@ -324,7 +342,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState.unauthenticated(showOnboarding: false);
   }
 
-  String _extractApiErrorMessage(dynamic responseData, {required String fallback}) {
+  String _extractApiErrorMessage(
+    dynamic responseData, {
+    required String fallback,
+  }) {
     if (responseData is Map<String, dynamic>) {
       final code = (responseData['code'] ?? '').toString().toUpperCase();
       if (code == 'INVALID_SIGNATURE') {
@@ -394,6 +415,28 @@ final userProvider = StateNotifierProvider<UserNotifier, UserModel?>((ref) {
   return UserNotifier();
 });
 
+final userProfileProvider = FutureProvider<UserModel?>((ref) async {
+  final dio = ref.watch(dioClientProvider);
+  final localStorage = ref.watch(localStorageProvider);
+
+  try {
+    final response = await dio.get(ApiConstants.profile);
+    final body = response.data as Map<String, dynamic>? ?? {};
+    final data = body['data'] as Map<String, dynamic>? ?? {};
+    final normalized = _normalizeUserProfilePayload(data);
+    await localStorage.cacheData(StorageKeys.cachedUserProfile, normalized);
+    return UserModel.fromJson(normalized);
+  } on DioException {
+    final cached = localStorage.getCachedData<dynamic>(
+      StorageKeys.cachedUserProfile,
+    );
+    if (cached is Map) {
+      return UserModel.fromJson(Map<String, dynamic>.from(cached));
+    }
+    rethrow;
+  }
+});
+
 class UserNotifier extends StateNotifier<UserModel?> {
   UserNotifier() : super(null);
 
@@ -436,4 +479,27 @@ class UserNotifier extends StateNotifier<UserModel?> {
   void clearUser() {
     state = null;
   }
+}
+
+Map<String, dynamic> _normalizeUserProfilePayload(Map<String, dynamic> data) {
+  final nowIso = DateTime.now().toIso8601String();
+  final id = (data['id'] ?? data['_id'] ?? '').toString();
+  final phone = (data['phone'] ?? data['phoneNumber'] ?? '').toString();
+
+  return {
+    'id': id,
+    'phone': phone,
+    'name': data['name'],
+    'email': data['email'],
+    'profileImage': data['profileImage'],
+    'dateOfBirth': data['dateOfBirth'],
+    'gender': data['gender'],
+    'healthGoals': data['healthGoals'] ?? const <String>[],
+    'dietaryPreferences': data['dietaryPreferences'],
+    'dailyRoutine': data['dailyRoutine'],
+    'loyaltyInfo': data['loyaltyInfo'],
+    'isOnboardingComplete': data['isOnboardingComplete'] == true,
+    'createdAt': (data['createdAt'] ?? nowIso).toString(),
+    'updatedAt': (data['updatedAt'] ?? nowIso).toString(),
+  };
 }

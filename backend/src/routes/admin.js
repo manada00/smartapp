@@ -12,6 +12,7 @@ const SupportTicket = require('../models/SupportTicket');
 const SystemLog = require('../models/SystemLog');
 const SystemMetric = require('../models/SystemMetric');
 const SystemAlert = require('../models/SystemAlert');
+const cache = require('../services/cache/cacheService');
 const { protectAdmin, requireRoles } = require('../middleware/adminAuth');
 const { syncOrderPaymentToSupabase } = require('../services/payment/supabaseOrderSync');
 const { sendOrderConfirmationEmail } = require('../services/email/orderConfirmationService');
@@ -80,6 +81,14 @@ const getOrCreateAppConfig = async () => {
 
 const ADMIN_ROLES = ['SUPER_ADMIN', 'OPERATIONS_ADMIN', 'SUPPORT_ADMIN'];
 
+const invalidateFoodCache = async () => {
+  await Promise.all([
+    cache.del('food:categories'),
+    cache.del('food:menu'),
+    cache.del('food:popular'),
+  ]);
+};
+
 const getDateWindow = ({ range = 'daily', from, to }) => {
   if (from || to) {
     return {
@@ -106,6 +115,88 @@ const getDateWindow = ({ range = 'daily', from, to }) => {
 };
 
 router.use(protectAdmin);
+
+router.get('/metrics', async (req, res) => {
+  try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [
+      paidRevenueToday,
+      ordersToday,
+      newUsers,
+      activeUsers,
+      revenueOverTime,
+      ordersPerHour,
+      activeUsersTrend,
+      recentErrors,
+    ] = await Promise.all([
+      Order.aggregate([
+        { $match: { createdAt: { $gte: startOfToday }, paymentStatus: 'paid' } },
+        { $group: { _id: null, total: { $sum: '$total' } } },
+      ]),
+      Order.countDocuments({ createdAt: { $gte: startOfToday } }),
+      User.countDocuments({ createdAt: { $gte: startOfToday } }),
+      User.countDocuments({ lastActiveAt: { $gte: yesterday } }),
+      Order.aggregate([
+        { $match: { createdAt: { $gte: last30Days }, paymentStatus: 'paid' } },
+        {
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+            revenue: { $sum: '$total' },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      Order.aggregate([
+        { $match: { createdAt: { $gte: startOfToday } } },
+        {
+          $group: {
+            _id: { $hour: '$createdAt' },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { _id: 1 } },
+      ]),
+      SystemMetric.find({ timestamp: { $gte: last30Days } })
+        .sort({ timestamp: 1 })
+        .select('timestamp activeUsers')
+        .limit(500),
+      SystemLog.find({ level: 'error' })
+        .sort({ timestamp: -1 })
+        .limit(20)
+        .select('timestamp service level message requestPath stack stackTrace'),
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        dailyRevenue: Number((paidRevenueToday[0]?.total || 0).toFixed(2)),
+        ordersToday,
+        newUsers,
+        activeUsers,
+        revenueOverTime: revenueOverTime.map((entry) => ({
+          date: entry._id,
+          revenue: Number(entry.revenue || 0),
+        })),
+        ordersPerHour: ordersPerHour.map((entry) => ({
+          hour: Number(entry._id || 0),
+          count: Number(entry.count || 0),
+        })),
+        activeUsersTrend: activeUsersTrend.map((entry) => ({
+          timestamp: entry.timestamp,
+          activeUsers: Number(entry.activeUsers || 0),
+        })),
+        recentErrors,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 router.get('/overview', async (req, res) => {
   try {
@@ -515,6 +606,8 @@ router.post('/menu/categories', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'),
       isActive: typeof isActive === 'boolean' ? isActive : true,
     });
 
+    await invalidateFoodCache();
+
     return res.status(201).json({ success: true, data: category });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -565,6 +658,7 @@ router.put('/menu/categories/:id', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN
     }
 
     await category.save();
+    await invalidateFoodCache();
 
     return res.json({ success: true, data: category });
   } catch (error) {
@@ -618,6 +712,7 @@ router.post('/menu', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'), async (req
     });
 
     await food.populate('category', 'name');
+    await invalidateFoodCache();
     return res.status(201).json({ success: true, data: food });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -694,6 +789,7 @@ router.put('/menu/:id', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'), async (
 
     await food.save();
     await food.populate('category', 'name');
+    await invalidateFoodCache();
 
     return res.json({ success: true, data: food });
   } catch (error) {
@@ -722,6 +818,7 @@ router.put('/menu/:id/image', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'), a
     food.images = [trimmed, ...otherImages];
     await food.save();
     await food.populate('category', 'name');
+    await invalidateFoodCache();
 
     return res.json({ success: true, data: food });
   } catch (error) {
@@ -750,6 +847,7 @@ router.post('/menu/:id/duplicate', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN
 
     const duplicate = await Food.create(duplicateData);
     await duplicate.populate('category', 'name');
+    await invalidateFoodCache();
 
     return res.status(201).json({ success: true, data: duplicate });
   } catch (error) {
@@ -769,6 +867,8 @@ router.post('/menu/reorder', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'), as
         Food.findByIdAndUpdate(id, { $set: { sortOrder: index } }),
       ),
     );
+
+    await invalidateFoodCache();
 
     return res.json({ success: true, message: 'Menu order updated' });
   } catch (error) {
@@ -819,6 +919,8 @@ router.post('/menu/bulk-pricing', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'
       await food.save();
     }));
 
+    await invalidateFoodCache();
+
     return res.json({ success: true, message: 'Bulk pricing applied' });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -841,6 +943,7 @@ router.post('/menu/:id/schedule', requireRoles('SUPER_ADMIN', 'OPERATIONS_ADMIN'
 
     await food.save();
     await food.populate('category', 'name');
+    await invalidateFoodCache();
     return res.json({ success: true, data: food });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -1323,7 +1426,6 @@ router.get('/reports', async (req, res) => {
         totalSales: Number(completedSalesAgg[0]?.total || 0),
         totalOrders,
         returnedOrders,
-        casesOrMessagesSent: messageCount,
         casesOrMessagesSent: supportCaseCount + Number(supportMessagesSent[0]?.total || 0),
         topItems,
         lowPerformanceItems,
@@ -1399,7 +1501,7 @@ router.get('/logs', async (req, res) => {
     const logs = await SystemLog.find({})
       .sort({ timestamp: -1 })
       .limit(100)
-      .select('timestamp service level message stackTrace');
+      .select('timestamp service level message requestPath stack stackTrace');
 
     return res.json({ success: true, data: logs });
   } catch (error) {

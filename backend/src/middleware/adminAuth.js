@@ -23,6 +23,10 @@ const protectAdmin = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Admin access denied' });
     }
 
+    if (!admin.role) {
+      return res.status(403).json({ success: false, message: 'Admin role is required' });
+    }
+
     req.admin = admin;
     next();
   } catch (error) {

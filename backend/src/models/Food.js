@@ -14,6 +14,11 @@ const foodSchema = new mongoose.Schema({
     ref: 'Category',
     required: true,
   },
+  categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    index: true,
+  },
   images: [String],
   price: {
     type: Number,
@@ -78,6 +83,11 @@ const foodSchema = new mongoose.Schema({
     type: Boolean,
     default: true,
   },
+  isActive: {
+    type: Boolean,
+    default: true,
+    index: true,
+  },
   isFeatured: {
     type: Boolean,
     default: false,
@@ -99,5 +109,27 @@ const foodSchema = new mongoose.Schema({
 });
 
 foodSchema.index({ name: 'text', description: 'text' });
+foodSchema.index({ categoryId: 1 });
+foodSchema.index({ isActive: 1 });
+
+foodSchema.pre('validate', function(next) {
+  if (!this.categoryId && this.category) {
+    this.categoryId = this.category;
+  }
+
+  if (!this.category && this.categoryId) {
+    this.category = this.categoryId;
+  }
+
+  if (this.isActive === undefined && this.isAvailable !== undefined) {
+    this.isActive = this.isAvailable;
+  }
+
+  if (this.isAvailable === undefined && this.isActive !== undefined) {
+    this.isAvailable = this.isActive;
+  }
+
+  next();
+});
 
 module.exports = mongoose.model('Food', foodSchema);

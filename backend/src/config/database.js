@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { logSystemEvent } = require('../services/system/systemLogger');
 
 mongoose.set('bufferCommands', false);
 
@@ -97,6 +98,12 @@ const connectDB = async () => {
     return connectionPromise;
   } catch (error) {
     console.error(`Error: ${error.message}`);
+    void logSystemEvent({
+      level: 'error',
+      service: 'mongodb',
+      message: error.message,
+      stackTrace: error,
+    });
     throw error;
   }
 };

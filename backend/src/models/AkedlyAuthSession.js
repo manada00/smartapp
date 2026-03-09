@@ -17,6 +17,10 @@ const akedlyAuthSessionSchema = new mongoose.Schema({
     type: String,
     index: true,
   },
+  phoneNumber: {
+    type: String,
+    index: true,
+  },
   status: {
     type: String,
     enum: ['pending', 'verified', 'success', 'failed'],
@@ -47,5 +51,18 @@ const akedlyAuthSessionSchema = new mongoose.Schema({
 });
 
 akedlyAuthSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+akedlyAuthSessionSchema.index({ createdAt: -1 });
+
+akedlyAuthSessionSchema.pre('validate', function(next) {
+  if (!this.phoneNumber && this.phone) {
+    this.phoneNumber = this.phone;
+  }
+
+  if (!this.phone && this.phoneNumber) {
+    this.phone = this.phoneNumber;
+  }
+
+  next();
+});
 
 module.exports = mongoose.model('AkedlyAuthSession', akedlyAuthSessionSchema);
